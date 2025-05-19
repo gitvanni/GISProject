@@ -18,7 +18,7 @@ namespace GISProject.Models
 
         public Point? CurrentLocation { get; set; }
 
-        public ICollection<Trail> CreatedTrails { get; set; }
+        public ICollection<Trail>? CreatedTrails { get; set; }
 
     }
 

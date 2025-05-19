@@ -24,13 +24,16 @@ namespace GISProject.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("GISProject.Models.GeoEntity", b =>
+            modelBuilder.Entity("GISProject.Models.PointOfInterest", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -42,11 +45,54 @@ namespace GISProject.Migrations
                         .IsRequired()
                         .HasColumnType("geometry");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
-                    b.ToTable("GeoEntities");
+                    b.ToTable("PointsOfInterest");
+                });
 
-                    b.UseTptMappingStrategy();
+            modelBuilder.Entity("GISProject.Models.Trail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedByUserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Difficulty")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("EstimatedLengthMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<Geometry>("Geometry")
+                        .IsRequired()
+                        .HasColumnType("geometry");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("TrailType")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.ToTable("Trails");
                 });
 
             modelBuilder.Entity("GISProject.Models.User", b =>
@@ -58,7 +104,7 @@ namespace GISProject.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<Point>("CurrentLocation")
-                        .HasColumnType("geometry(Point,4326)");
+                        .HasColumnType("geometry");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -81,64 +127,19 @@ namespace GISProject.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("GISProject.Models.PointOfInterest", b =>
+            modelBuilder.Entity("PointOfInterestTrail", b =>
                 {
-                    b.HasBaseType("GISProject.Models.GeoEntity");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<long?>("TrailId")
+                    b.Property<long>("PointsOfInterestId")
                         .HasColumnType("bigint");
 
-                    b.HasIndex("TrailId");
-
-                    b.ToTable("PointsOfInterests");
-                });
-
-            modelBuilder.Entity("GISProject.Models.Trail", b =>
-                {
-                    b.HasBaseType("GISProject.Models.GeoEntity");
-
-                    b.Property<long?>("CreatedByUserId")
+                    b.Property<long>("TrailsId")
                         .HasColumnType("bigint");
 
-                    b.Property<int>("Difficulty")
-                        .HasColumnType("integer");
+                    b.HasKey("PointsOfInterestId", "TrailsId");
 
-                    b.Property<double?>("EstimatedLengthMeters")
-                        .HasColumnType("double precision");
+                    b.HasIndex("TrailsId");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("TrailType")
-                        .HasColumnType("integer");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.ToTable("Trails");
-                });
-
-            modelBuilder.Entity("GISProject.Models.PointOfInterest", b =>
-                {
-                    b.HasOne("GISProject.Models.GeoEntity", null)
-                        .WithOne()
-                        .HasForeignKey("GISProject.Models.PointOfInterest", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GISProject.Models.Trail", "Trail")
-                        .WithMany("PointsOfInterest")
-                        .HasForeignKey("TrailId");
-
-                    b.Navigation("Trail");
+                    b.ToTable("TrailPointOfInterest", (string)null);
                 });
 
             modelBuilder.Entity("GISProject.Models.Trail", b =>
@@ -147,23 +148,27 @@ namespace GISProject.Migrations
                         .WithMany("CreatedTrails")
                         .HasForeignKey("CreatedByUserId");
 
-                    b.HasOne("GISProject.Models.GeoEntity", null)
-                        .WithOne()
-                        .HasForeignKey("GISProject.Models.Trail", "Id")
+                    b.Navigation("CreatedByUser");
+                });
+
+            modelBuilder.Entity("PointOfInterestTrail", b =>
+                {
+                    b.HasOne("GISProject.Models.PointOfInterest", null)
+                        .WithMany()
+                        .HasForeignKey("PointsOfInterestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CreatedByUser");
+                    b.HasOne("GISProject.Models.Trail", null)
+                        .WithMany()
+                        .HasForeignKey("TrailsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GISProject.Models.User", b =>
                 {
                     b.Navigation("CreatedTrails");
-                });
-
-            modelBuilder.Entity("GISProject.Models.Trail", b =>
-                {
-                    b.Navigation("PointsOfInterest");
                 });
 #pragma warning restore 612, 618
         }

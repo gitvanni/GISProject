@@ -2,8 +2,9 @@
 {
     public enum TrailType
     {
-        Unknown,
-        Line,
-        Polygon
+        Unknown = 0,
+        Line = 1,
+        MultiLine = 2,
+        Polygon = 3
     }
 }

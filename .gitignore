@@ -365,3 +365,4 @@ FodyWeavers.xsd
 #Config file
 appsettings.json
 ApplicationDbContext.cs
+GISProject/Migrations/

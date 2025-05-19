@@ -32,9 +32,6 @@ namespace GISProject.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<int>("Category")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -52,6 +49,19 @@ namespace GISProject.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("PointsOfInterest");
+                });
+
+            modelBuilder.Entity("GISProject.Models.PointOfInterestCategory", b =>
+                {
+                    b.Property<long>("PointOfInterestId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PointOfInterestId", "Category");
+
+                    b.ToTable("PointOfInterestCategory");
                 });
 
             modelBuilder.Entity("GISProject.Models.Trail", b =>
@@ -142,6 +152,17 @@ namespace GISProject.Migrations
                     b.ToTable("TrailPointOfInterest", (string)null);
                 });
 
+            modelBuilder.Entity("GISProject.Models.PointOfInterestCategory", b =>
+                {
+                    b.HasOne("GISProject.Models.PointOfInterest", "PointOfInterest")
+                        .WithMany("PoiCategories")
+                        .HasForeignKey("PointOfInterestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PointOfInterest");
+                });
+
             modelBuilder.Entity("GISProject.Models.Trail", b =>
                 {
                     b.HasOne("GISProject.Models.User", "CreatedByUser")
@@ -164,6 +185,11 @@ namespace GISProject.Migrations
                         .HasForeignKey("TrailsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("GISProject.Models.PointOfInterest", b =>
+                {
+                    b.Navigation("PoiCategories");
                 });
 
             modelBuilder.Entity("GISProject.Models.User", b =>

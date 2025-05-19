@@ -9,7 +9,7 @@ namespace GISProject.Models
 
         public string Name { get; set; } = string.Empty;
 
-        public PoiCategory Category { get; set; } = PoiCategory.Generic;
+        public ICollection<PointOfInterestCategory> PoiCategories { get; set; }
 
         public Geometry Geometry { get; set; } = default!;
 

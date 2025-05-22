@@ -1,5 +1,5 @@
-﻿@{
-    ViewData["Title"] = "Mappa dei Punti di Interesse Dinamica";
+@{
+    ViewData["Title"] = "Mappa Dinamica dei Trail";
 }
 
 <h2>@ViewData["Title"]</h2>
@@ -15,10 +15,9 @@
     const vectorLayer = new ol.layer.Vector({
         source: vectorSource,
         style: new ol.style.Style({
-            image: new ol.style.Circle({
-                radius: 3,
-                fill: new ol.style.Fill({ color: 'green' }),
-                stroke: null
+            stroke: new ol.style.Stroke({
+                color: 'blue',
+                width: 2
             })
         })
     });
@@ -35,18 +34,19 @@
         })
     });
 
-    async function loadPoisFromExtent() {
+    async function loadTrailsFromMapExtent() {
         const extent = map.getView().calculateExtent(map.getSize());
         const bottomLeft = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
         const topRight = ol.proj.toLonLat(ol.extent.getTopRight(extent));
 
-        const url = `/api/pointsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
+        const url = `/api/trailsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
         const response = await fetch(url);
-        const pois = await response.json();
+        const trails = await response.json();
 
-        const features = pois.map(poi => {
-            const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-            const feature = new ol.Feature({ geometry, name: poi.name });
+        const features = trails.map(t => {
+            const coords = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
+            const line = new ol.geom.LineString(coords);
+            const feature = new ol.Feature({ geometry: line, name: t.name });
             return feature;
         });
 
@@ -54,6 +54,6 @@
         vectorSource.addFeatures(features);
     }
 
-    map.on('moveend', loadPoisFromExtent);
-    window.addEventListener('DOMContentLoaded', loadPoisFromExtent);
+    map.on('moveend', loadTrailsFromMapExtent);
+    window.addEventListener('DOMContentLoaded', loadTrailsFromMapExtent);
 </script>

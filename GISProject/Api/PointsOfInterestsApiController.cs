@@ -1,7 +1,11 @@
 ﻿using GISProject.Data;
+using GISProject.Enum;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.IO;
+using System.Linq;
 
 namespace GISProject.Api
 {
@@ -41,6 +45,29 @@ namespace GISProject.Api
                 });
 
             return Ok(points);
+        }
+
+        [HttpGet("points")]
+        public IActionResult Get([FromQuery] PoiCategory category)
+        {
+            var filteredPoints = _context.PointsOfInterest
+                .Include(p => p.PoiCategories)
+                .Where(p => p.Geometry != null && p.PoiCategories.Any(c => c.Category == category))
+                .ToList()
+                .Select(p => 
+                {
+                    var pt = (Point)p.Geometry!;
+                    return new
+                    {
+                        p.Id,
+                        p.Name,
+                        Latitude = pt.Y,
+                        Longitude = pt.X
+                    };
+                    
+                });
+                
+            return Ok(filteredPoints);
         }
     }
 }

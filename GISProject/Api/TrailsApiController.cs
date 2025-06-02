@@ -4,7 +4,7 @@ using GISProject.Services.Geo;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 
-namespace GISProject.Controllers.Api
+namespace GISProject.Api
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -36,7 +36,7 @@ namespace GISProject.Controllers.Api
                     t.Name,
                     t.Difficulty,
                     Coordinates = _geometryMapper.MapCoordinates(t.Geometry)
-                        .Select(c => new { Latitude = c.Latitude, Longitude = c.Longitude })
+                        .Select(c => new { c.Latitude, c.Longitude })
                 });
 
             return Ok(trails);

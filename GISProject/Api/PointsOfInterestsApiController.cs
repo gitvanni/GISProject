@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NetTopologySuite.Geometries;
 
-namespace GISProject.Controllers.Api
+namespace GISProject.Api
 {
     [Route("api/[controller]")]
     [ApiController]

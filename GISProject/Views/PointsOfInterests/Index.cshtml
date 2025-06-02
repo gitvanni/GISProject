@@ -40,7 +40,7 @@
         const bottomLeft = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
         const topRight = ol.proj.toLonLat(ol.extent.getTopRight(extent));
 
-        const url = `/api/pointsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
+        const url = `../../api/pointsofinterestsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
         const response = await fetch(url);
         const pois = await response.json();
 

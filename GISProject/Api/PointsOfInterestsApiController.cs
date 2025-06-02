@@ -1,11 +1,14 @@
 ﻿using GISProject.Data;
 using GISProject.Enum;
+using GISProject.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using System.Linq;
+using System.Text.Json;
 
 namespace GISProject.Api
 {
@@ -47,6 +50,8 @@ namespace GISProject.Api
             return Ok(points);
         }
 
+
+        //Get all points of a certain category
         [HttpGet("points")]
         public IActionResult Get([FromQuery] PoiCategory category)
         {
@@ -68,6 +73,52 @@ namespace GISProject.Api
                 });
                 
             return Ok(filteredPoints);
+        }
+
+
+        //Add a point
+        [HttpPost("post")]
+        public async Task<IActionResult> Post([FromBody] JsonElement body)
+        {
+            try
+            {
+                // Estrai latitudine e longitudine
+                var coords = body.GetProperty("geometry").GetProperty("coordinates");
+                double lon = coords[0].GetDouble();
+                double lat = coords[1].GetDouble();
+
+                string name = body.GetProperty("name").GetString()!;
+                string category = body
+                    .GetProperty("poiCategories")[0]
+                    .GetProperty("category")
+                    .GetString()!;
+
+                // Crea il punto con NetTopologySuite
+                var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+                var point = geometryFactory.CreatePoint(new Coordinate(lon, lat));
+
+                var poi = new PointOfInterest
+                {
+                    Name = name,
+                    Geometry = point,
+                    PoiCategories = new List<PointOfInterestCategory>
+            {
+                new PointOfInterestCategory
+                {
+                    Category = System.Enum.Parse<PoiCategory>(category)
+                }
+            }
+                };
+
+                _context.PointsOfInterest.Add(poi);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { poi.Id });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Errore: {ex.Message}");
+            }
         }
     }
 }

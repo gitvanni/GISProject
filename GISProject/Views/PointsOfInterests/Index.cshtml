@@ -34,6 +34,29 @@
     <a href="#" onclick="loadPoint('9')">Show Info Points</a>
     <a href="#" onclick="loadPoint('1')">Show New Point</a> 
 </div>
+<div id="infoSidebar" style="
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100%;
+  background-color: white;
+  border-left: 1px solid #ccc;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  padding: 16px;
+  display: none;
+  z-index: 1000;
+">
+    <h3>Point Info</h3>
+    <p><strong>Name:</strong> <span id="infoName"></span></p>
+    <p><strong>Latitude:</strong> <span id="infoLat"></span></p>
+    <p><strong>Longitude:</strong> <span id="infoLon"></span></p>
+    <p><strong>Categories:</strong> <span id="infoCat"></span></p>
+    <input type="hidden" id="infoPointId" />
+    <button onclick="closeSidebar()">Close</button>
+    <button onclick="deletePoint()" style="background: red; color: white; padding: 5px 10px; border: none;">Delete Point</button>
+</div>
+</div>
 <div id="map" style="width: 100%; height: 600px;"></div>
 
 <script>
@@ -96,7 +119,7 @@
         }
     }
 
-
+    /*
     //Ogni volta che l'utente clicca la mappa viene chiamata la funzione per aggiungere il punto
     map.on('click', async function (event) {
             const coordinate = ol.proj.toLonLat(event.coordinate);
@@ -112,15 +135,52 @@
             // Save to DB
             await savePointToDb(lat, lon);
         });
+*/
+    map.on('singleclick', function (evt) {
+      map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
+        if (layer === vectorLayer) {
+          // Extract info
+          const name = feature.get('name');
+          const lat = feature.get('latitude');
+          const lon = feature.get('longitude');
+          const cat = feature.get('categories');
+          const id = feature.get('id');
+             
+          // Fill in the sidebar
+          document.getElementById('infoName').textContent = name;
+          document.getElementById('infoLat').textContent = lat.toFixed(6);
+          document.getElementById('infoLon').textContent = lon.toFixed(6);
+          document.getElementById('infoCat').textContent = cat.join(',');
+          document.getElementById('infoPointId').value = id;
+
+          // Show the sidebar
+          document.getElementById('infoSidebar').style.display = 'block';
+        }
+      });
+    });
+
+    function closeSidebar() {
+         document.getElementById('infoSidebar').style.display = 'none';
+    }
+
+     map.on('click', function (evt) {
+         const feature = map.forEachFeatureAtPixel(evt.pixel, (f, l) => l === vectorLayer ? f : null);
+         if (!feature) {
+             closeSidebar();
+         }
+     });
+
+
 
     async function loadPoint(param){
         const url = `../../api/pointsofinterestsapi/points?category=${param}`;
         const response = await fetch(url);
         
         const pois = await response.json();
+        console.log(pois)
         const features = pois.map(poi => {
             const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-            const feature = new ol.Feature({ geometry, name: poi.name });
+            const feature = new ol.Feature({ geometry, name: poi.name, id: poi.id, latitude: poi.latitude, longitude: poi.longitude, categories: poi.categories });
             return feature;
         });
 
@@ -128,9 +188,31 @@
         vectorSource.addFeatures(features);
     }
 
+    async function deletePoint() {
+        const id = document.getElementById('infoPointId').value;
+        if (!id) return;
+
+        const confirmed = confirm("Are you sure you want to delete this point?");
+        if (!confirmed) return;
+
+        const response = await fetch(`/api/pointsofinterestsapi/points/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            alert("Point deleted.");
+            document.getElementById('infoSidebar').style.display = 'none';
+            // Optional: remove point from map
+            const feature = vectorLayer.getSource().getFeatures().find(f => f.get('id') == id);
+            if (feature) vectorLayer.getSource().removeFeature(feature);
+        } else {
+            alert("Failed to delete point.");
+        }
+}
 
 
 
+//dynamic load of points
 /*
     async function loadPoisFromExtent() {
         const extent = map.getView().calculateExtent(map.getSize());

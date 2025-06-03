@@ -67,7 +67,8 @@ namespace GISProject.Api
                         p.Id,
                         p.Name,
                         Latitude = pt.Y,
-                        Longitude = pt.X
+                        Longitude = pt.X,
+                        Categories = p.PoiCategories.Select(c => c.Category.ToString()).ToList()
                     };
                     
                 });
@@ -119,6 +120,22 @@ namespace GISProject.Api
             {
                 return StatusCode(500, $"Errore: {ex.Message}");
             }
+        }
+
+        [HttpDelete("points/{id}")]
+        public async Task<IActionResult> DeletePoint(long id)
+        {
+            var point = await _context.PointsOfInterest.FindAsync(id);
+
+            if (point == null)
+            {
+                return NotFound();
+            }
+
+            _context.PointsOfInterest.Remove(point);
+            await _context.SaveChangesAsync();
+
+            return NoContent(); // 204
         }
     }
 }

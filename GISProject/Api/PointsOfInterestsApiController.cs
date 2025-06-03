@@ -51,7 +51,7 @@ namespace GISProject.Api
         }
 
 
-        //Get all points of a certain category
+        //Restituisce tutti i punti di una certa categoria
         [HttpGet("points")]
         public IActionResult Get([FromQuery] PoiCategory category)
         {
@@ -77,38 +77,32 @@ namespace GISProject.Api
         }
 
 
-        //Add a point
+        //Permette di aggiungere un punto
         [HttpPost("post")]
         public async Task<IActionResult> Post([FromBody] JsonElement body)
         {
             try
             {
-                // Estrai latitudine e longitudine
-                var coords = body.GetProperty("geometry").GetProperty("coordinates");
-                double lon = coords[0].GetDouble();
-                double lat = coords[1].GetDouble();
-
+                //estrazione proprietà dal json
+                double lon = body.GetProperty("longitude").GetDouble();
+                double lat = body.GetProperty("latitude").GetDouble();               
+                string? description = body.TryGetProperty("description", out var desc) ? desc.GetString() : null;
                 string name = body.GetProperty("name").GetString()!;
-                string category = body
-                    .GetProperty("poiCategories")[0]
-                    .GetProperty("category")
-                    .GetString()!;
+                var categoriesJson = body.GetProperty("categories").EnumerateArray();
+                var categories = categoriesJson
+                    .Select(c => System.Enum.Parse<PoiCategory>(c.GetString()!))
+                    .ToList();
+             
 
                 // Crea il punto con NetTopologySuite
                 var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
-                var point = geometryFactory.CreatePoint(new Coordinate(lon, lat));
-
+                var point = geometryFactory.CreatePoint(new Coordinate(lon, lat));              
                 var poi = new PointOfInterest
                 {
                     Name = name,
                     Geometry = point,
-                    PoiCategories = new List<PointOfInterestCategory>
-            {
-                new PointOfInterestCategory
-                {
-                    Category = System.Enum.Parse<PoiCategory>(category)
-                }
-            }
+                    Description = description,               
+                    PoiCategories = categories.Select(cat => new PointOfInterestCategory { Category = cat }).ToList()          
                 };
 
                 _context.PointsOfInterest.Add(poi);
@@ -122,6 +116,7 @@ namespace GISProject.Api
             }
         }
 
+        //Eliminare un punto
         [HttpDelete("points/{id}")]
         public async Task<IActionResult> DeletePoint(long id)
         {

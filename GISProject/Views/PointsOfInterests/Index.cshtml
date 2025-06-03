@@ -6,6 +6,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/ol@7.3.0/dist/ol.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.3.0/ol.css" />
+
+@*Stile per i pulsanti che permettono di ottenere i punti di una certa categoria*@
 <style>
     .category-buttons {
         margin-bottom: 1rem;
@@ -14,26 +16,31 @@
         justify-content: center;
     }
 
-        .category-buttons a {
-            text-decoration: none;
-            padding: 10px 20px;
-            background-color: #0078D7;
-            color: white;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
+    .category-buttons a {
+        text-decoration: none;
+        padding: 10px 20px;
+        background-color: #0078D7;
+        color: white;
+        border-radius: 5px;
+        font-weight: bold;
+        transition: background-color 0.3s;
+    }
 
-            .category-buttons a:hover {
-                background-color: #005fa3;
-            }
+    .category-buttons a:hover {
+        background-color: #005fa3;
+    }
 </style>
+
+@*Pulsanti per ottenere i punti in base alla categoria. Di seguito ho messo solo le categorie che hoi nel DB.*@
 <div class="category-buttons">
     <a href="#" onclick="loadPoint('21')">Show Signposts</a>
     <a href="#" onclick="loadPoint('20')">Show Danger Points</a>
     <a href="#" onclick="loadPoint('9')">Show Info Points</a>
     <a href="#" onclick="loadPoint('1')">Show New Point</a> 
 </div>
+
+
+@*Sidebar che mostra le info di un punto*@
 <div id="infoSidebar" style="
   position: absolute;
   top: 0;
@@ -56,7 +63,39 @@
     <button onclick="closeSidebar()">Close</button>
     <button onclick="deletePoint()" style="background: red; color: white; padding: 5px 10px; border: none;">Delete Point</button>
 </div>
+
+@*Pulsante che permtte di aggiungere un punto*@
+<button onclick="enableAddMode()">Add New Point</button>
+
+@* Side bar che viene mostata quando si aggiunge un punto*@
+<div id="addSidebar" style="display: none; position: absolute; right: 0; top: 0; width: 300px; background: #f8f8f8; padding: 20px; border-left: 1px solid #ccc;">
+    <h3>Add New Point</h3>
+    <form id="addPointForm" onsubmit="submitNewPoint(event)">
+        <label for="pointName">Name:</label><br />
+        <input type="text" id="pointName" name="pointName" required /><br /><br />
+
+        <label for="pointDescription">Description:</label><br />
+        <textarea id="pointDescription" name="pointDescription"></textarea><br /><br />
+
+        <label for="pointCategories">Category:</label><br />
+        <select id="pointCategories" name="pointCategories" multiple required size="4">
+            <option value="Bar">Bar</option>
+            <option value="Museum">Museum</option>
+            <option value="Park">Park</option>
+            <option value="Signpost">Signpost</option>
+            <option value="DangerPoint">DangerPoint</option>
+            <!-- Add more if needed -->
+        </select><br /><small>Hold Ctrl (or Cmd) to select multiple</small><br /><br />
+
+        <input type="hidden" id="pointLat" />
+        <input type="hidden" id="pointLon" />
+
+        <button type="submit">Add Point</button>
+        <button type="button" onclick="cancelAdd()">Cancel</button>
+    </form>
 </div>
+
+
 <div id="map" style="width: 100%; height: 600px;"></div>
 
 <script>
@@ -85,9 +124,9 @@
         })
     });
 
+    //di seguito le versioni vecchie per aggiungere un punto, andranno rimosse successivamente
 
-    //Aggiunge il punto alla mappa. Per il momento è hardcoded 
-        // TODO: Permettere all'utente di specificare nome,categoria, ecc.
+/*
     async function savePointToDb(lat, lon) {
         const data = {
             name: "User Point", 
@@ -118,7 +157,9 @@
             alert("Error saving point.");
         }
     }
+*/
 
+    
     /*
     //Ogni volta che l'utente clicca la mappa viene chiamata la funzione per aggiungere il punto
     map.on('click', async function (event) {
@@ -136,6 +177,9 @@
             await savePointToDb(lat, lon);
         });
 */
+
+
+    //evento che permette di visualizzare la sidebar se si clicca su un punto
     map.on('singleclick', function (evt) {
       map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
         if (layer === vectorLayer) {
@@ -159,9 +203,13 @@
       });
     });
 
+
+    //funzione per chiudere la sidebar delle info del punto
     function closeSidebar() {
          document.getElementById('infoSidebar').style.display = 'none';
     }
+
+
 
      map.on('click', function (evt) {
          const feature = map.forEachFeatureAtPixel(evt.pixel, (f, l) => l === vectorLayer ? f : null);
@@ -171,7 +219,35 @@
      });
 
 
+     //variabile di supporto. se è false non è possibile aggiungere un punto cliccando sulla mappa
+     let addMode = false;
 
+
+    //funzione di supporto per abilitare l'aggiunta di un punto
+    function enableAddMode() {
+        addMode = true;
+        alert("Click on the map to add a new point.");
+    }
+
+
+
+    //se la addmode è true cliccando sulla mappa si può aggiungere un punto 
+    map.on('click', function (evt) {
+        if (!addMode) return;
+
+        const coords = ol.proj.toLonLat(evt.coordinate);
+        const lon = coords[0].toFixed(6);
+        const lat = coords[1].toFixed(6);
+
+        document.getElementById('pointLat').value = lat;
+        document.getElementById('pointLon').value = lon;
+        document.getElementById('addSidebar').style.display = 'block';
+
+        addMode = false; // reset add mode
+    });
+
+
+    //funzione per caricare punti in base alla categoria
     async function loadPoint(param){
         const url = `../../api/pointsofinterestsapi/points?category=${param}`;
         const response = await fetch(url);
@@ -188,6 +264,8 @@
         vectorSource.addFeatures(features);
     }
 
+
+    //funzione per eliminare un punto selezionato
     async function deletePoint() {
         const id = document.getElementById('infoPointId').value;
         if (!id) return;
@@ -209,6 +287,57 @@
             alert("Failed to delete point.");
         }
 }
+
+
+    //Funzione per aggiungere un punto tramite il form
+    async function submitNewPoint(event) {
+        event.preventDefault();
+
+        const name = document.getElementById('pointName').value;
+        const description = document.getElementById('pointDescription').value;
+        const lat = parseFloat(document.getElementById('pointLat').value);
+        const lon = parseFloat(document.getElementById('pointLon').value);
+
+        const select = document.getElementById('pointCategories');
+        const selected = Array.from(select.selectedOptions).map(option => option.value);
+
+        if (selected.length === 0) {
+            alert("Please select at least one category.");
+            return;
+        }
+
+        const data = {
+            name,
+            description,
+            latitude: lat,
+            longitude: lon,
+            categories: selected // <-- important
+        };
+
+        console.log(data)
+
+        const response = await fetch('../../api/pointsofinterestsapi/post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            alert("Point added successfully!");
+            document.getElementById('addSidebar').style.display = 'none';
+            document.getElementById('addPointForm').reset();
+            // Optionally add the new point to the map
+        } else {
+            alert("Failed to add point.");
+        }
+    }
+
+    //Funzione di supporto. Disabilita la addMode e nasconde la sidebar per l'aggiunta
+    function cancelAdd() {
+        document.getElementById('addSidebar').style.display = 'none';
+        addMode = false;
+    }
+
 
 
 

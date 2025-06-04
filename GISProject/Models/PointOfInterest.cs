@@ -1,5 +1,5 @@
 ﻿using NetTopologySuite.Geometries;
-using GISProject.Enum;
+using GISProject.Enumerations;
 
 namespace GISProject.Models
 {

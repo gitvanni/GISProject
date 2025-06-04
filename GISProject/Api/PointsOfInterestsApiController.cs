@@ -1,5 +1,5 @@
 ﻿using GISProject.Data;
-using GISProject.Enum;
+using GISProject.Enumerations;
 using GISProject.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -59,7 +59,7 @@ namespace GISProject.Api
                 .Include(p => p.PoiCategories)
                 .Where(p => p.Geometry != null && p.PoiCategories.Any(c => c.Category == category))
                 .ToList()
-                .Select(p => 
+                .Select(p =>
                 {
                     var pt = (Point)p.Geometry!;
                     return new
@@ -70,9 +70,9 @@ namespace GISProject.Api
                         Longitude = pt.X,
                         Categories = p.PoiCategories.Select(c => c.Category.ToString()).ToList()
                     };
-                    
+
                 });
-                
+
             return Ok(filteredPoints);
         }
 
@@ -85,24 +85,24 @@ namespace GISProject.Api
             {
                 //estrazione proprietà dal json
                 double lon = body.GetProperty("longitude").GetDouble();
-                double lat = body.GetProperty("latitude").GetDouble();               
+                double lat = body.GetProperty("latitude").GetDouble();
                 string? description = body.TryGetProperty("description", out var desc) ? desc.GetString() : null;
                 string name = body.GetProperty("name").GetString()!;
                 var categoriesJson = body.GetProperty("categories").EnumerateArray();
                 var categories = categoriesJson
                     .Select(c => System.Enum.Parse<PoiCategory>(c.GetString()!))
                     .ToList();
-             
+
 
                 // Crea il punto con NetTopologySuite
                 var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
-                var point = geometryFactory.CreatePoint(new Coordinate(lon, lat));              
+                var point = geometryFactory.CreatePoint(new Coordinate(lon, lat));
                 var poi = new PointOfInterest
                 {
                     Name = name,
                     Geometry = point,
-                    Description = description,               
-                    PoiCategories = categories.Select(cat => new PointOfInterestCategory { Category = cat }).ToList()          
+                    Description = description,
+                    PoiCategories = categories.Select(cat => new PointOfInterestCategory { Category = cat }).ToList()
                 };
 
                 _context.PointsOfInterest.Add(poi);

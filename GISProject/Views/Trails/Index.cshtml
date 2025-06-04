@@ -1,59 +1,292 @@
-@{
-    ViewData["Title"] = "Mappa Dinamica dei Trail";
+﻿@{
+    ViewData["Title"] = "Mappa dei Trail Dinamica";
 }
-
 <h2>@ViewData["Title"]</h2>
 
 <script src="https://cdn.jsdelivr.net/npm/ol@7.3.0/dist/ol.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.3.0/ol.css" />
 
+<style>
+    #infoSidebar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 300px;
+        height: 100%;
+        background-color: white;
+        border-left: 1px solid #ccc;
+        padding: 16px;
+        display: none;
+        z-index: 1000;
+    }
+
+    #drawNotification, #legend, #cancelButton {
+        margin-top: 10px;
+    }
+
+    #drawNotification {
+        color: #005fa3;
+        font-weight: bold;
+        display: none;
+    }
+
+    #cancelButton {
+        display: none;
+        background: #ccc;
+        border: none;
+        padding: 6px 10px;
+        cursor: pointer;
+    }
+
+    #legend {
+        background-color: #f5f5f5;
+        border: 1px solid #ccc;
+        padding: 10px;
+        width: fit-content;
+    }
+</style>
+
+<button onclick="enableDrawing()">Disegna Trail</button>
+<button id="cancelButton" onclick="cancelDrawing()">Annulla (ESC)</button>
+
+<div id="drawNotification">Modalità disegno attiva. 🖱️ Sinistro per punti, 🖱️ Destro per chiudere segmento o salvare.</div>
+
+<div id="legend">
+    <strong>Legenda:</strong>
+    <ul>
+        <li>🖱️ Sinistro: aggiungi punto</li>
+        <li>🖱️ Destro (1° click): chiudi segmento</li>
+        <li>🖱️ Destro (2° click): salva trail</li>
+        <li>⎋ ESC: annulla</li>
+    </ul>
+</div>
+
 <div id="map" style="width: 100%; height: 600px;"></div>
 
-<script>
-    let vectorSource = new ol.source.Vector();
+<div id="infoSidebar">
+    <h3>Trail Info</h3>
+    <p><strong>Nome:</strong> <span id="trailName"></span></p>
+    <p><strong>Difficoltà:</strong> <span id="trailDifficulty"></span></p>
+    <input type="hidden" id="trailId" />
+    <button onclick="deleteTrail()" style="background: red; color: white;">Elimina</button>
+    <button onclick="closeSidebar()">Chiudi</button>
+</div>
 
+<script>
+    const vectorSource = new ol.source.Vector();
     const vectorLayer = new ol.layer.Vector({
         source: vectorSource,
         style: new ol.style.Style({
-            stroke: new ol.style.Stroke({
-                color: 'blue',
-                width: 2
-            })
+            stroke: new ol.style.Stroke({ color: 'blue', width: 2 })
         })
     });
 
     const map = new ol.Map({
         target: 'map',
-        layers: [
-            new ol.layer.Tile({ source: new ol.source.OSM() }),
-            vectorLayer
-        ],
-        view: new ol.View({
-            center: ol.proj.fromLonLat([12.5, 42.5]),
-            zoom: 6
-        })
+        layers: [new ol.layer.Tile({ source: new ol.source.OSM() }), vectorLayer],
+        view: new ol.View({ center: ol.proj.fromLonLat([12.5, 42.5]), zoom: 6 })
     });
 
     async function loadTrailsFromMapExtent() {
         const extent = map.getView().calculateExtent(map.getSize());
         const bottomLeft = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
         const topRight = ol.proj.toLonLat(ol.extent.getTopRight(extent));
-
-        const url = `/api/trailsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
-        const response = await fetch(url);
-        const trails = await response.json();
+        const res = await fetch(`/api/trailsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`);
+        const trails = await res.json();
 
         const features = trails.map(t => {
             const coords = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
-            const line = new ol.geom.LineString(coords);
-            const feature = new ol.Feature({ geometry: line, name: t.name });
-            return feature;
+            return new ol.Feature({ geometry: new ol.geom.LineString(coords), name: t.name, id: t.id, difficulty: t.difficulty });
         });
 
         vectorSource.clear();
         vectorSource.addFeatures(features);
     }
 
-    map.on('moveend', loadTrailsFromMapExtent);
     window.addEventListener('DOMContentLoaded', loadTrailsFromMapExtent);
+    map.on('moveend', loadTrailsFromMapExtent);
+
+    map.on('singleclick', evt => {
+        if (drawActive) return;
+        const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+        if (feature) {
+            document.getElementById('trailName').textContent = feature.get('name');
+            document.getElementById('trailDifficulty').textContent = feature.get('difficulty');
+            document.getElementById('trailId').value = feature.get('id');
+            document.getElementById('infoSidebar').style.display = 'block';
+        } else {
+            closeSidebar();
+        }
+    });
+
+    function closeSidebar() {
+        document.getElementById('infoSidebar').style.display = 'none';
+    }
+
+    async function deleteTrail() {
+        const id = document.getElementById('trailId').value;
+        if (!id) return;
+        if (!confirm("Confermi l'eliminazione?")) return;
+
+        const res = await fetch(`/api/trailsapi/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            loadTrailsFromMapExtent();
+            closeSidebar();
+        }
+    }
+
+    let drawActive = false;
+    let segments = [[]];
+    let ghostFeature = null;
+    let newTrailName = '';
+    let newTrailDifficulty = '';
+
+    function enableDrawing() {
+        const name = prompt("Nome della trail:");
+        if (!name) return;
+
+        const difficulty = prompt("Difficoltà (Easy, Moderate, Hard):", "Moderate");
+        if (!difficulty) return;
+
+        drawActive = true;
+        segments = [[]];
+        newTrailName = name;
+        newTrailDifficulty = difficulty;
+        document.getElementById('drawNotification').style.display = 'block';
+        document.getElementById('cancelButton').style.display = 'inline-block';
+        map.getTargetElement().style.cursor = 'crosshair';
+
+        console.log("✏️ Modalità disegno attivata.");
+    }
+
+    function cancelDrawing() {
+        drawActive = false;
+        segments = [[]];
+        if (ghostFeature) {
+            vectorSource.removeFeature(ghostFeature);
+            ghostFeature = null;
+        }
+        document.getElementById('drawNotification').style.display = 'none';
+        document.getElementById('cancelButton').style.display = 'none';
+        map.getTargetElement().style.cursor = '';
+        console.log("❌ Disegno annullato.");
+    }
+
+    document.addEventListener('keydown', async function (event) {
+        if (event.key === 'Escape') {
+            cancelDrawing();
+        }
+
+        if (event.key === 'Enter' && drawActive) {
+            drawActive = false;
+            document.getElementById('drawNotification').style.display = 'none';
+            document.getElementById('cancelButton').style.display = 'none';
+            map.getTargetElement().style.cursor = '';
+
+            const validSegments = segments.filter(s => s.length > 1);
+            if (validSegments.length === 0) {
+                alert("Nessuna linea valida disegnata.");
+                return;
+            }
+
+            const geometry = {
+                type: validSegments.length > 1 ? "MultiLineString" : "LineString",
+                coordinates: validSegments.length > 1 ? validSegments : validSegments[0]
+            };
+
+            const body = {
+                name: newTrailName,
+                difficulty: newTrailDifficulty,
+                trailType: geometry.type === "MultiLineString" ? "MultiLine" : "Line",
+                geometry: geometry
+            };
+
+            console.log("📦 Trail pronta da salvare:", JSON.stringify(body, null, 2));
+
+            try {
+                const res = await fetch('/api/trailsapi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const result = await res.text();
+                console.log("📬 Risposta dal server:", res.status, result);
+
+                if (res.ok) {
+                    loadTrailsFromMapExtent();
+                } else {
+                    alert("Errore nel salvataggio. Controlla la console.");
+                }
+            } catch (err) {
+                console.error("❗ Errore durante il fetch:", err);
+            }
+
+            segments = [[]];
+        }
+    });
+
+    map.on('click', evt => {
+        if (!drawActive) return;
+        const coord = ol.proj.toLonLat(evt.coordinate);
+        segments[segments.length - 1].push(coord);
+    });
+
+        // ... tutto il resto invariato sopra
+
+    map.on('pointermove', evt => {
+        if (!drawActive || segments.length === 0) return;
+
+        const allLines = [];
+        const mouseCoord = ol.proj.toLonLat(evt.coordinate);
+
+        // Linee fisse già disegnate
+        for (const segment of segments.slice(0, -1)) {
+            if (segment.length > 1) {
+                const coords = segment.map(c => ol.proj.fromLonLat(c));
+                allLines.push(new ol.geom.LineString(coords));
+            }
+        }
+
+        // Linea corrente con preview
+        const currentSegment = segments.at(-1);
+        if (currentSegment.length > 0) {
+            const preview = [...currentSegment, mouseCoord].map(c => ol.proj.fromLonLat(c));
+            allLines.push(new ol.geom.LineString(preview));
+        }
+
+        // Unione di tutte le geometrie
+        const multi = new ol.geom.MultiLineString(allLines.map(line => line.getCoordinates()));
+
+        if (!ghostFeature) {
+            ghostFeature = new ol.Feature({ geometry: multi });
+            ghostFeature.setStyle(new ol.style.Style({
+                stroke: new ol.style.Stroke({ color: 'blue', width: 2, lineDash: [4, 4] })
+            }));
+            vectorSource.addFeature(ghostFeature);
+        } else {
+            ghostFeature.setGeometry(multi);
+        }
+    });
+
+    document.getElementById('map').addEventListener('click', evt => {
+        // Bloccato il click sinistro per l'aggiunta punti
+        if (drawActive) evt.preventDefault();
+    });
+
+    document.getElementById('map').addEventListener('contextmenu', evt => {
+        if (!drawActive) return;
+        evt.preventDefault();
+        const coordinate = ol.proj.toLonLat(map.getEventCoordinate(evt));
+        const currentSegment = segments.at(-1);
+
+        if (currentSegment.length === 0) {
+            console.log("👉 Primo punto del nuovo segmento.");
+        } else {
+            console.log("✅ Segmento chiuso con", currentSegment.length, "punti.");
+        }
+
+        segments.push([]);
+    });
+
 </script>

@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using System;
-using GISProject.Enum;
+using GISProject.Enumerations;
 
 namespace GISProject.Models
 {

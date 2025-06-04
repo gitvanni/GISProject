@@ -1,4 +1,4 @@
-﻿namespace GISProject.Enum
+﻿namespace GISProject.Enumerations
 {
     public enum DifficultyLevel
     {

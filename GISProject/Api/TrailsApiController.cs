@@ -7,6 +7,7 @@ using GISProject.Data;
 using GISProject.Models;
 using GISProject.Enumerations;
 using GISProject.Services.Geo;
+using NetTopologySuite.IO;
 
 namespace GISProject.Api
 {
@@ -104,6 +105,18 @@ namespace GISProject.Api
 
                     geometry = factory.CreateMultiLineString(segments.ToArray());
                 }
+                else if (trailType == TrailType.Polygon)
+                {
+                    var coords = coordinatesJson.EnumerateArray().Select(c =>
+                        new Coordinate(c[0].GetDouble(), c[1].GetDouble())).ToList();
+
+                    // Verifica se il poligono è chiuso, altrimenti chiudilo
+                    if (!coords.First().Equals2D(coords.Last()))
+                        coords.Add(coords.First());
+
+                    var ring = factory.CreateLinearRing(coords.ToArray());
+                    geometry = factory.CreatePolygon(ring);
+                }
                 else
                 {
                     return BadRequest("Tipo di trail non supportato");
@@ -140,8 +153,38 @@ namespace GISProject.Api
             try
             {
                 trail.Name = data.GetProperty("name").GetString()!;
-                trail.Difficulty = Enum.Parse<DifficultyLevel>(data.GetProperty("difficulty").GetString()!);
-                trail.TrailType = Enum.Parse<TrailType>(data.GetProperty("trailType").GetString()!);
+
+                var difficultyRaw = data.GetProperty("difficulty");
+                DifficultyLevel difficulty;
+
+                if (difficultyRaw.ValueKind == JsonValueKind.String)
+                {
+                    difficulty = Enum.Parse<DifficultyLevel>(difficultyRaw.GetString()!);
+                }
+                else if (difficultyRaw.ValueKind == JsonValueKind.Number)
+                {
+                    difficulty = (DifficultyLevel)difficultyRaw.GetInt32();
+                }
+                else
+                {
+                    return BadRequest("Formato della difficoltà non valido.");
+                }
+
+                var trailTypeRaw = data.GetProperty("trailType");
+                TrailType trailType;
+
+                if (trailTypeRaw.ValueKind == JsonValueKind.String)
+                {
+                    trailType = Enum.Parse<TrailType>(trailTypeRaw.GetString()!);
+                }
+                else if (trailTypeRaw.ValueKind == JsonValueKind.Number)
+                {
+                    trailType = (TrailType)trailTypeRaw.GetInt32();
+                }
+                else
+                {
+                    return BadRequest("Formato del tipo trail non valido.");
+                }
 
                 var coordinatesJson = data.GetProperty("geometry").GetProperty("coordinates");
                 var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
@@ -166,6 +209,18 @@ namespace GISProject.Api
 
                     trail.Geometry = factory.CreateMultiLineString(segments.ToArray());
                 }
+                else if (trail.TrailType == TrailType.Polygon)
+                {
+                    var coords = coordinatesJson.EnumerateArray().Select(c =>
+                        new Coordinate(c[0].GetDouble(), c[1].GetDouble())).ToList();
+
+                    // Verifica se il poligono è chiuso, altrimenti chiudilo
+                    if (!coords.First().Equals2D(coords.Last()))
+                        coords.Add(coords.First());
+
+                    var ring = factory.CreateLinearRing(coords.ToArray());
+                    trail.Geometry = factory.CreatePolygon(ring);
+                }
 
                 await _context.SaveChangesAsync();
                 return NoContent();
@@ -189,5 +244,76 @@ namespace GISProject.Api
 
             return NoContent();
         }
+
+        [HttpPost("spatialfilter")]
+        public IActionResult SpatialFilter([FromBody] JsonElement data)
+        {
+            try
+            {
+                var geomJson = data.GetProperty("geometry").ToString();
+                var reader = new GeoJsonReader();
+                var filterGeometry = reader.Read<Geometry>(geomJson);
+                filterGeometry.SRID = 4326;
+
+                var result = _context.Trails
+                    .Where(t => t.Geometry != null && t.Geometry.Intersects(filterGeometry))
+                    .Take(1000)
+                    .ToList()
+                    .Select(t =>
+                    {
+                        var coords = _geometryMapper.MapCoordinates(t.Geometry)
+                            .Select(c => new { c.Latitude, c.Longitude });
+
+                        return new
+                        {
+                            t.Id,
+                            t.Name,
+                            t.Difficulty,
+                            t.TrailType,
+                            Coordinates = coords
+                        };
+                    });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Errore nel filtro spaziale trail: {ex.Message}");
+            }
+        }
+        
+        //Gets trails based on the difficulty
+        [HttpGet("bydifficulty")]
+        public IActionResult GetByDifficulty([FromQuery] string level,
+                                     [FromQuery] double minLon, [FromQuery] double minLat,
+                                     [FromQuery] double maxLon, [FromQuery] double maxLat)
+        {
+            if (!Enum.TryParse<DifficultyLevel>(level, ignoreCase: true, out var parsedLevel))
+                return BadRequest("Difficoltà non valida");
+
+            var envelope = new Envelope(minLon, maxLon, minLat, maxLat);
+            var box = Geometry.DefaultFactory.ToGeometry(envelope);
+            box.SRID = 4326;
+
+            var trails = _context.Trails
+                .Where(t => t.Geometry != null &&
+                            t.Geometry.Intersects(box) &&
+                            t.Difficulty == parsedLevel)
+                .Take(1000)
+                .ToList()
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Name,
+                    t.Difficulty,
+                    t.TrailType,
+                    Coordinates = _geometryMapper.MapCoordinates(t.Geometry)
+                        .Select(c => new { c.Latitude, c.Longitude })
+                });
+
+            return Ok(trails);
+        }
+
+
     }
 }

@@ -116,6 +116,23 @@ namespace GISProject.Api
             }
         }
 
+        [HttpPut("points/{id}")]
+        public async Task<IActionResult> UpdatePoint(long id, [FromBody] JsonElement body)
+        {
+            var point = await _context.PointsOfInterest.FindAsync(id);
+            if (point == null) return NotFound();
+
+            double lon = body.GetProperty("longitude").GetDouble();
+            double lat = body.GetProperty("latitude").GetDouble();
+
+            var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            point.Geometry = factory.CreatePoint(new Coordinate(lon, lat));
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+
         //Eliminare un punto
         [HttpDelete("points/{id}")]
         public async Task<IActionResult> DeletePoint(long id)
@@ -132,5 +149,42 @@ namespace GISProject.Api
 
             return NoContent(); // 204
         }
+
+        //Filtro di ricerca spaziale
+        [HttpPost("spatialfilter")]
+        public IActionResult SpatialFilter([FromBody] JsonElement data)
+        {
+            try
+            {
+                var geomJson = data.GetProperty("geometry").ToString();
+                var reader = new NetTopologySuite.IO.GeoJsonReader();
+                var filterGeometry = reader.Read<Geometry>(geomJson);
+                filterGeometry.SRID = 4326;
+
+                var result = _context.PointsOfInterest
+                    .Include(p => p.PoiCategories)
+                    .Where(p => p.Geometry != null && p.Geometry.Intersects(filterGeometry))
+                    .Take(1000)
+                    .ToList()
+                    .Select(p => {
+                        var point = (Point)p.Geometry!;
+                        return new
+                        {
+                            p.Id,
+                            p.Name,
+                            Latitude = point.Y,
+                            Longitude = point.X,
+                            Categories = p.PoiCategories.Select(c => c.Category.ToString()).ToList()
+                        };
+                    });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Errore durante il filtro spaziale: {ex.Message}");
+            }
+        }
+
     }
 }

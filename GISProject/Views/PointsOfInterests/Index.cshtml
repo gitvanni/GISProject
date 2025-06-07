@@ -66,6 +66,9 @@
 
 @*Pulsante che permtte di aggiungere un punto*@
 <button onclick="enableAddMode()">Add New Point</button>
+<button onclick="enablePointEditMode()">✏️ Modify a POI</button>
+<button onclick="enableSpatialFilter()">🔍 Spatial Filter</button>
+
 
 @* Side bar che viene mostata quando si aggiunge un punto*@
 <div id="addSidebar" style="display: none; position: absolute; right: 0; top: 0; width: 300px; background: #f8f8f8; padding: 20px; border-left: 1px solid #ccc;">
@@ -338,31 +341,79 @@
         addMode = false;
     }
 
+        function enablePointEditMode() {
+        const pointFeatures = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
+        const modify = new ol.interaction.Modify({ features: new ol.Collection(pointFeatures) });
+        map.addInteraction(modify);
 
+        modify.on('modifyend', async e => {
+            for (const f of e.features.getArray()) {
+                const coords = ol.proj.toLonLat(f.getGeometry().getCoordinates());
+                const id = f.get('id');
 
-
-//dynamic load of points
-/*
-    async function loadPoisFromExtent() {
-        const extent = map.getView().calculateExtent(map.getSize());
-        const bottomLeft = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
-        const topRight = ol.proj.toLonLat(ol.extent.getTopRight(extent));
-
-        const url = `../../api/pointsofinterestsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
-        const response = await fetch(url);
-        const pois = await response.json();
-
-        const features = pois.map(poi => {
-            const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-            const feature = new ol.Feature({ geometry, name: poi.name });
-            return feature;
+                await fetch(`/api/pointsofinterestsapi/points/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latitude: coords[1], longitude: coords[0] })
+                });
+            }
+            alert("Punti aggiornati");
+            map.removeInteraction(modify);
         });
-
-        vectorSource.clear();
-        vectorSource.addFeatures(features);
     }
 
-    map.on('moveend', loadPoisFromExtent);
-    window.addEventListener('DOMContentLoaded', loadPoisFromExtent);
-    */
+        let drawFilterInteraction = null;
+
+    function enableSpatialFilter() {
+        if (drawFilterInteraction) {
+            map.removeInteraction(drawFilterInteraction);
+        }
+
+        drawFilterInteraction = new ol.interaction.Draw({
+            source: new ol.source.Vector(),
+            type: 'Polygon'
+        });
+
+        map.addInteraction(drawFilterInteraction);
+
+        drawFilterInteraction.on('drawend', async (event) => {
+            const feature = event.feature;
+            const geom = feature.getGeometry();
+            const coords = geom.getCoordinates()[0].map(c => ol.proj.toLonLat(c));
+
+            const geometryGeoJSON = {
+                type: 'Polygon',
+                coordinates: [coords]
+            };
+
+            const response = await fetch('/api/pointsofinterestsapi/spatialfilter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ geometry: geometryGeoJSON })
+            });
+
+            const pois = await response.json();
+
+            const features = pois.map(poi => {
+                const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
+                return new ol.Feature({
+                    geometry,
+                    name: poi.name,
+                    id: poi.id,
+                    latitude: poi.latitude,
+                    longitude: poi.longitude,
+                    categories: poi.categories
+                });
+            });
+
+            vectorSource.clear();
+            vectorSource.addFeatures(features);
+
+            map.removeInteraction(drawFilterInteraction);
+            drawFilterInteraction = null;
+        });
+
+        alert("Disegna un poligono per filtrare i POI");
+    }
+
 </script>

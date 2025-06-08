@@ -7,53 +7,55 @@
 <script src="https://cdn.jsdelivr.net/npm/ol@7.3.0/dist/ol.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.3.0/ol.css" />
 
-@*Stile per i pulsanti che permettono di ottenere i punti di una certa categoria*@
 <style>
-    .category-buttons {
-        margin-bottom: 1rem;
-        display: flex;
-        gap: 1rem;
-        justify-content: center;
+    #infoSidebar{
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 300px;
+        height: 100%;
+        background-color: white;
+        border-left: 1px solid #ccc;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        padding: 16px;
+        display: none;
+        z-index: 1000;
     }
 
-    .category-buttons a {
-        text-decoration: none;
-        padding: 10px 20px;
-        background-color: #0078D7;
+    #addSidebar{
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 300px;
+        background: #f8f8f8;
+        padding: 20px;
+        border-left: 1px solid #ccc;
+    }
+
+    #deletePointButton{
+        background: red;
         color: white;
-        border-radius: 5px;
-        font-weight: bold;
-        transition: background-color 0.3s;
+        padding: 5px 10px;
+        border: none;
     }
 
-    .category-buttons a:hover {
-        background-color: #005fa3;
+    #categoryMenu{
+        display: none;
+        position: absolute;
+        left: 0;
+        top: 150px;
+        width:300px;
+        background: #f2f2f2;
+        padding: 10px;
+        border: 1px solid #ccc;
+        max-height: 300px;
+        overflow-y: auto;
     }
 </style>
 
-@*Pulsanti per ottenere i punti in base alla categoria. Di seguito ho messo solo le categorie che hoi nel DB.*@
-<div class="category-buttons">
-    <a href="#" onclick="loadPoint('21')">Show Signposts</a>
-    <a href="#" onclick="loadPoint('20')">Show Danger Points</a>
-    <a href="#" onclick="loadPoint('9')">Show Info Points</a>
-    <a href="#" onclick="loadPoint('1')">Show New Point</a> 
-</div>
-
-
 @*Sidebar che mostra le info di un punto*@
-<div id="infoSidebar" style="
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 300px;
-  height: 100%;
-  background-color: white;
-  border-left: 1px solid #ccc;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-  padding: 16px;
-  display: none;
-  z-index: 1000;
-">
+<div id="infoSidebar"> 
     <h3>Point Info</h3>
     <p><strong>Name:</strong> <span id="infoName"></span></p>
     <p><strong>Latitude:</strong> <span id="infoLat"></span></p>
@@ -61,17 +63,48 @@
     <p><strong>Categories:</strong> <span id="infoCat"></span></p>
     <input type="hidden" id="infoPointId" />
     <button onclick="closeSidebar()">Close</button>
-    <button onclick="deletePoint()" style="background: red; color: white; padding: 5px 10px; border: none;">Delete Point</button>
+    <button id="deletePointButton"onclick="deletePoint()">Delete Point</button>
 </div>
 
 @*Pulsante che permtte di aggiungere un punto*@
-<button onclick="enableAddMode()">Add New Point</button>
+<button onclick="addPoint()">Add New Point</button>
 <button onclick="enablePointEditMode()">✏️ Modify a POI</button>
 <button onclick="enableSpatialFilter()">🔍 Spatial Filter</button>
+<button onclick="openCategorySelector()">Show Points</button>
+<button onclick="clearAllVectorSources()">Clear All</button>
+
+<div id="categoryMenu">
+    <p>Select the points you desire to see!</p>
+    <label><input type="checkbox" value="0"> Generic</label><br>
+    <label><input type="checkbox" value="1"> Drinking Water</label><br>
+    <label><input type="checkbox" value="2"> Shelter</label><br>
+    <label><input type="checkbox" value="3"> Toilet</label><br>
+    <label><input type="checkbox" value="4"> Restaurant</label><br>
+    <label><input type="checkbox" value="5"> Bar</label><br>
+    <label><input type="checkbox" value="6"> Viewpoint</label><br>
+    <label><input type="checkbox" value="7"> Camp Site</label><br>
+    <label><input type="checkbox" value="8"> Bench</label><br>
+    <label><input type="checkbox" value="9"> Info</label><br>
+    <label><input type="checkbox" value="10"> Parking</label><br>
+    <label><input type="checkbox" value="11"> Picnic Site</label><br>
+    <label><input type="checkbox" value="12"> Fireplace</label><br>
+    <label><input type="checkbox" value="13"> Ruin</label><br>
+    <label><input type="checkbox" value="14"> Summit</label><br>
+    <label><input type="checkbox" value="15"> Waterfall</label><br>
+    <label><input type="checkbox" value="16"> Bridge</label><br>
+    <label><input type="checkbox" value="17"> Gate</label><br>
+    <label><input type="checkbox" value="18"> Cross</label><br>
+    <label><input type="checkbox" value="19"> Cave</label><br>
+    <label><input type="checkbox" value="20"> Danger</label><br>
+    <label><input type="checkbox" value="21"> Signpost</label><br><br>
+    <button onclick="loadSelectedCategories()">Load Points</button>
+    <button style="background:darkred; color: white"onclick="closeCategorySelector()">Exit</button>
+</div>
+
 
 
 @* Side bar che viene mostata quando si aggiunge un punto*@
-<div id="addSidebar" style="display: none; position: absolute; right: 0; top: 0; width: 300px; background: #f8f8f8; padding: 20px; border-left: 1px solid #ccc;">
+<div id="addSidebar">
     <h3>Add New Point</h3>
     <form id="addPointForm" onsubmit="submitNewPoint(event)">
         <label for="pointName">Name:</label><br />
@@ -127,65 +160,103 @@
         })
     });
 
-    //di seguito le versioni vecchie per aggiungere un punto, andranno rimosse successivamente
+    //funzione che elimina tutte le feature sulla mappa
+    function clearAllVectorSources() {
+        map.getLayers().forEach(layer => {
+            const source = layer.getSource?.();
+            if (source && source instanceof ol.source.Vector) {
+                source.clear();
+            }
+        });
+    }
 
-/*
-    async function savePointToDb(lat, lon) {
-        const data = {
-            name: "User Point", 
-            geometry: {
-                type: "Point",
-                coordinates: [lon, lat]
-            },
-            poiCategories: [
-                {
-                    category: "1" 
-                }
-            ]
+    function openCategorySelector() {
+      document.getElementById("categoryMenu").style.display = "block";
+    }
+
+    function closeCategorySelector() {
+      document.getElementById("categoryMenu").style.display = "none";
+    }
+
+
+    async function loadSelectedCategories() {
+      const checkboxes = document.querySelectorAll('#categoryMenu input[type="checkbox"]:checked');
+      const selectedCategories = Array.from(checkboxes).map(cb => cb.value);
+
+      for (const cat of selectedCategories) {
+        const url = `../../api/pointsofinterestsapi/points?category=${cat}`;
+        const response = await fetch(url);
+        const pois = await response.json();
+
+        const color = getColorForCategory(cat);
+
+        const features = pois.map(poi => {
+          const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
+          const feature = new ol.Feature({
+            geometry,
+            name: poi.name,
+            id: poi.id,
+            latitude: poi.latitude,
+            longitude: poi.longitude,
+            categories: poi.categories
+          });
+          
+          return feature;
+        });
+
+        const layer = new ol.layer.Vector({
+          source: new ol.source.Vector({
+            features
+          }),
+          style: new ol.style.Style({
+            image: new ol.style.Circle({
+              radius: 3,
+              fill: new ol.style.Fill({ color }),
+              stroke: null
+            })
+          })
+        });
+
+        map.addLayer(layer);
+      }
+
+      document.getElementById("categoryMenu").style.display = "none";
+    }
+
+    function getColorForCategory(category) {
+        const categoryColors = {
+            0: '#808080',  // Generic - gray
+            1: '#1E90FF',  // DrinkingWater - blue
+            2: '#A0522D',  // Shelter - sienna
+            3: '#8B0000',  // Toilet - dark red
+            4: '#FF4500',  // Restaurant - orange red
+            5: '#FF69B4',  // Bar - hot pink
+            6: '#FFD700',  // Viewpoint - gold
+            7: '#228B22',  // CampSite - forest green
+            8: '#A9A9A9',  // Bench - dark gray
+            9: '#00CED1',  // Info - dark turquoise
+            10: '#2F4F4F', // Parking - dark slate gray
+            11: '#32CD32', // PicnicSite - lime green
+            12: '#B22222', // Fireplace - firebrick
+            13: '#708090', // Ruin - slate gray
+            14: '#8A2BE2', // Summit - blue violet
+            15: '#00BFFF', // Waterfall - deep sky blue
+            16: '#A52A2A', // Bridge - brown
+            17: '#6B8E23', // Gate - olive drab
+            18: '#DAA520', // Cross - goldenrod
+            19: '#696969', // Cave - dim gray
+            20: '#DC143C', // Danger - crimson
+            21: '#4169E1'  // Signpost - royal blue
         };
 
-        console.log(data);
-
-        const response = await fetch('../../api/pointsofinterestsapi/post', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        console.log(response);
-        if (response.ok) {
-            alert("Point saved!");
-        } else {
-            alert("Error saving point.");
-        }
+        return categoryColors[category] || '#000000'; // default to black
     }
-*/
 
     
-    /*
-    //Ogni volta che l'utente clicca la mappa viene chiamata la funzione per aggiungere il punto
-    map.on('click', async function (event) {
-            const coordinate = ol.proj.toLonLat(event.coordinate);
-            const lon = coordinate[0];
-            const lat = coordinate[1];
-
-            // Draw point on map
-            const feature = new ol.Feature({
-                geometry: new ol.geom.Point(event.coordinate)
-            });
-            vectorLayer.getSource().addFeature(feature);
-
-            // Save to DB
-            await savePointToDb(lat, lon);
-        });
-*/
-
 
     //evento che permette di visualizzare la sidebar se si clicca su un punto
     map.on('singleclick', function (evt) {
       map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
-        if (layer === vectorLayer) {
           // Extract info
           const name = feature.get('name');
           const lat = feature.get('latitude');
@@ -202,7 +273,6 @@
 
           // Show the sidebar
           document.getElementById('infoSidebar').style.display = 'block';
-        }
       });
     });
 
@@ -214,16 +284,16 @@
 
 
 
-     map.on('click', function (evt) {
+    map.on('click', function (evt) {
          const feature = map.forEachFeatureAtPixel(evt.pixel, (f, l) => l === vectorLayer ? f : null);
          if (!feature) {
              closeSidebar();
          }
-     });
+    });
 
 
      //variabile di supporto. se è false non è possibile aggiungere un punto cliccando sulla mappa
-     let addMode = false;
+    let addMode = false;
 
 
     //funzione di supporto per abilitare l'aggiunta di un punto
@@ -233,10 +303,18 @@
     }
 
 
+    function addPoint(){
+        enableAddMode();
+         //se la addmode è true cliccando sulla mappa si può aggiungere un punto
+        map.on('click', function (evt) {
+            if (!addMode) return;
 
-    //se la addmode è true cliccando sulla mappa si può aggiungere un punto 
-    map.on('click', function (evt) {
-        if (!addMode) return;
+            //se si sta disegnando un poligono per il filtro allora non è possibile aggiungere un punto
+            if(drawFilterInteraction){
+                addMode = false;
+                alert("You can't add a point now!")
+                return;
+            }
 
         const coords = ol.proj.toLonLat(evt.coordinate);
         const lon = coords[0].toFixed(6);
@@ -247,18 +325,21 @@
         document.getElementById('addSidebar').style.display = 'block';
 
         addMode = false; // reset add mode
-    });
+        });
+    }
+
+
+   
 
 
     //funzione per caricare punti in base alla categoria
     async function loadPoint(param){
         const url = `../../api/pointsofinterestsapi/points?category=${param}`;
         const response = await fetch(url);
-        
         const pois = await response.json();
-        console.log(pois)
+
         const features = pois.map(poi => {
-            const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
+            const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude])); //fromLonLat esegue la conversione da 4326 a 3857
             const feature = new ol.Feature({ geometry, name: poi.name, id: poi.id, latitude: poi.latitude, longitude: poi.longitude, categories: poi.categories });
             return feature;
         });
@@ -289,7 +370,7 @@
         } else {
             alert("Failed to delete point.");
         }
-}
+    }
 
 
     //Funzione per aggiungere un punto tramite il form
@@ -341,34 +422,38 @@
         addMode = false;
     }
 
-        function enablePointEditMode() {
-        const pointFeatures = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
-        const modify = new ol.interaction.Modify({ features: new ol.Collection(pointFeatures) });
-        map.addInteraction(modify);
+    function enablePointEditMode() {
+    const pointFeatures = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
+    const modify = new ol.interaction.Modify({ features: new ol.Collection(pointFeatures) });
+    map.addInteraction(modify);
 
-        modify.on('modifyend', async e => {
-            for (const f of e.features.getArray()) {
-                const coords = ol.proj.toLonLat(f.getGeometry().getCoordinates());
-                const id = f.get('id');
+    modify.on('modifyend', async e => {
+        for (const f of e.features.getArray()) {
+            const coords = ol.proj.toLonLat(f.getGeometry().getCoordinates());
+            const id = f.get('id');
 
-                await fetch(`/api/pointsofinterestsapi/points/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ latitude: coords[1], longitude: coords[0] })
-                });
-            }
-            alert("Punti aggiornati");
-            map.removeInteraction(modify);
+            await fetch(`/api/pointsofinterestsapi/points/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ latitude: coords[1], longitude: coords[0] })
+            });
+        }
+        alert("Punti aggiornati");
+        map.removeInteraction(modify);
         });
     }
 
-        let drawFilterInteraction = null;
+    let drawFilterInteraction = null;
 
     function enableSpatialFilter() {
+        //se la mappa è in add mode il filtro spaziale deve essere disabilitato
+        if(addMode){
+            alert("You can't filter while adding a point!");
+            return;
+        }
         if (drawFilterInteraction) {
             map.removeInteraction(drawFilterInteraction);
         }
-
         drawFilterInteraction = new ol.interaction.Draw({
             source: new ol.source.Vector(),
             type: 'Polygon'

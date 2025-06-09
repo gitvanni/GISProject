@@ -73,6 +73,8 @@
 <button onclick="openCategorySelector()">Show Points</button>
 <button onclick="clearAllVectorSources()">Clear All</button>
 
+
+@*Menu delle categorie*@
 <div id="categoryMenu">
     <p>Select the points you desire to see!</p>
     <label><input type="checkbox" value="0"> Generic</label><br>
@@ -423,7 +425,8 @@
     }
 
     function enablePointEditMode() {
-    const pointFeatures = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
+    //const pointFeatures = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
+    const pointFeatures = getAllPointFeaturesFromMap(map);
     const modify = new ol.interaction.Modify({ features: new ol.Collection(pointFeatures) });
     map.addInteraction(modify);
 
@@ -442,6 +445,22 @@
         map.removeInteraction(modify);
         });
     }
+
+    //funzione di supporti che restituisce tutti i punti presenti dalle feature
+    function getAllPointFeaturesFromMap(map) {
+        const pointFeatures = [];
+
+        map.getLayers().forEach(layer => {
+            const source = layer.getSource?.();
+            if (source instanceof ol.source.Vector) {
+                const points = source.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
+                pointFeatures.push(...points);
+            }
+        });
+
+        return pointFeatures;
+    }
+
 
     let drawFilterInteraction = null;
 

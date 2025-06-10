@@ -14,6 +14,8 @@ namespace GISProject.Services.Geo
             };
         }
 
+        public abstract object MapRawCoordinates(Geometry geometry);
+
         protected abstract IEnumerable<(double Latitude, double Longitude)> MapLineString(LineString line);
         protected abstract IEnumerable<(double Latitude, double Longitude)> MapMultiLineString(MultiLineString multi);
     }

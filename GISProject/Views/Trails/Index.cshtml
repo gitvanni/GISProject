@@ -1,319 +1,371 @@
-﻿@{
-    ViewData["Title"] = "Mappa dei Trail Dinamica";
-}
-<h2>@ViewData["Title"]</h2>
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>@ViewData["Title"]</title>
+    <script src="https://cdn.jsdelivr.net/npm/ol@7.3.0/dist/ol.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.3.0/ol.css" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
 
-<script src="https://cdn.jsdelivr.net/npm/ol@7.3.0/dist/ol.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.3.0/ol.css" />
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+            z-index: 0;
+        }
 
-<style>
-    #infoSidebar {
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 300px;
-        height: 100%;
-        background-color: white;
-        border-left: 1px solid #ccc;
-        padding: 16px;
-        display: none;
-        z-index: 1000;
-    }
+        #infoSidebar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 280px;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-left: 1px solid #ccc;
+            padding: 16px;
+            display: none;
+            z-index: 10;
+        }
 
-    #drawNotification, #legend, #cancelButton {
-        margin-top: 10px;
-    }
+        .top-controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 11;
+            background-color: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
 
-    #drawNotification {
-        color: #005fa3;
-        font-weight: bold;
-        display: none;
-    }
+            .top-controls button {
+                margin: 3px;
+                padding: 6px 10px;
+                font-size: 14px;
+                cursor: pointer;
+            }
 
-    #cancelButton {
-        display: none;
-        background: #ccc;
-        border: none;
-        padding: 6px 10px;
-        cursor: pointer;
-    }
+        #legend {
+            margin-top: 10px;
+            font-size: 13px;
+        }
 
-    #legend {
-        background-color: #f5f5f5;
-        border: 1px solid #ccc;
-        padding: 10px;
-        width: fit-content;
-    }
+        #drawNotification {
+            font-weight: bold;
+            color: #005fa3;
+            display: none;
+        }
 
-    <style >
-    .difficulty-filters {
-        margin-bottom: 10px;
-    }
+        #cancelButton {
+            display: none;
+            background-color: #ccc;
+            border: none;
+            padding: 5px 10px;
+            margin-top: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-controls">
+        <div>
+            <button onclick="enableDrawing()">Disegna Trail</button>
+            <button onclick="enableEditMode()">✏️ Modifica Trail</button>
+            <button onclick="enableTrailSpatialFilter()">🔍 Filtra Spaziale</button>
+            <button id="cancelButton" onclick="cancelDrawing()">Annulla (ESC)</button>
+            <button onclick="loadOnlyPolygonTrails()">Solo Poligoni</button>
+        </div>
+        <div class="difficulty-filters">
+            <button onclick="loadTrailsByDifficulty('All')">All</button>
+            <button onclick="loadTrailsByDifficulty('Easy')">Easy</button>
+            <button onclick="loadTrailsByDifficulty('Moderate')">Moderate</button>
+            <button onclick="loadTrailsByDifficulty('Hard')">Hard</button>
+        </div>
+        <div id="drawNotification">✏️ Disegna trail attivo</div>
+        <div id="legend">
+            <strong>Legenda:</strong>
+            <ul>
+                <li>🖱️ Sinistro: aggiungi punto</li>
+                <li>🖱️ Destro (1° click): chiudi segmento</li>
+                <li>🖱️ Destro (2° click): salva trail</li>
+                <li>⎋ ESC: annulla</li>
+            </ul>
+        </div>
+    </div>
 
-    .difficulty-filters button {
-        margin-right: 8px;
-        padding: 6px 12px;
-        font-weight: bold;
-        background: #eaeaea;
-        border: 1px solid #ccc;
-        cursor: pointer;
-    }
+    <div id="map"></div>
 
-</style>
-
-<button onclick="enableDrawing()">Disegna Trail</button>
-<button onclick="enableEditMode()">✏️ Modifica Trail</button>
-<button onclick="enableTrailSpatialFilter()">🔍 Spatial Filter for trails</button>
-<button id="cancelButton" onclick="cancelDrawing()">Annulla (ESC)</button>
-
-
-<div class="difficulty-filters">
-    <button onclick="loadTrailsByDifficulty('All')">All</button>
-    <button onclick="loadTrailsByDifficulty('Easy')">Easy</button>
-    <button onclick="loadTrailsByDifficulty('Moderate')">Moderate</button>
-    <button onclick="loadTrailsByDifficulty('Hard')">Hard</button>
-</div>
-
-
-
-<div id="drawNotification">Modalità disegno attiva. 🖱️ Sinistro per punti, 🖱️ Destro per chiudere segmento o salvare.</div>
-
-<div id="legend">
-    <strong>Legenda:</strong>
-    <ul>
-        <li>🖱️ Sinistro: aggiungi punto</li>
-        <li>🖱️ Destro (1° click): chiudi segmento</li>
-        <li>🖱️ Destro (2° click): salva trail</li>
-        <li>⎋ ESC: annulla</li>
-    </ul>
-</div>
-
-<div id="map" style="width: 100%; height: 600px;"></div>
-
-<div id="infoSidebar">
-    <h3>Trail Info</h3>
-    <p><strong>Nome:</strong> <span id="trailName"></span></p>
-    <p><strong>Difficoltà:</strong> <span id="trailDifficulty"></span></p>
-    <input type="hidden" id="trailId" />
-    <button onclick="deleteTrail()" style="background: red; color: white;">Elimina</button>
-    <button onclick="closeSidebar()">Chiudi</button>
-</div>
+    <div id="infoSidebar">
+        <h3>Trail Info</h3>
+        <p><strong>Nome:</strong> <span id="trailName"></span></p>
+        <p><strong>Difficoltà:</strong> <span id="trailDifficulty"></span></p>
+        <input type="hidden" id="trailId" />
+        <button onclick="deleteTrail()" style="background: red; color: white;">Elimina</button>
+        <button onclick="closeSidebar()">Chiudi</button>
+    </div>
+</body>
 
 <script>
-    let activeTrailFilter = null; // values: null | 'Easy' | 'Moderate' | 'Hard' | 'Spatial'
 
-    const vectorSource = new ol.source.Vector();
-    const vectorLayer = new ol.layer.Vector({
-        source: vectorSource,
-        style: new ol.style.Style({
-            stroke: new ol.style.Stroke({ color: 'blue', width: 2 })
-        })
-    });
+    let activeTrailFilter = null;
+        const vectorSource = new ol.source.Vector();
+        const vectorLayer = new ol.layer.Vector({ source: vectorSource, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'blue', width: 2 }) }) });
+        const map = new ol.Map({ target: 'map', layers: [ new ol.layer.Tile({ source: new ol.source.OSM() }), vectorLayer ], view: new ol.View({ center: ol.proj.fromLonLat([12.5, 42.5]), zoom: 6 }) });
 
-    const map = new ol.Map({
-        target: 'map',
-        layers: [new ol.layer.Tile({ source: new ol.source.OSM() }), vectorLayer],
-        view: new ol.View({ center: ol.proj.fromLonLat([12.5, 42.5]), zoom: 6 })
-    });
+        // Stato editing
+        let drawActive = false;
+        let segments = [[]];
+        let ghostFeature = null;
+        let newTrailName = '';
+        let newTrailDifficulty = '';
+        let modifyInteraction = null;
+        let selectedFeature = null;
 
-        async function loadTrailsFromMapExtent() {
-        if (activeTrailFilter !== null) return; // blocca se c'è un filtro attivo
-
-        const extent = map.getView().calculateExtent(map.getSize());
-        const bottomLeft = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
-        const topRight = ol.proj.toLonLat(ol.extent.getTopRight(extent));
-        const res = await fetch(`/api/trailsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`);
-        const trails = await res.json();
-
-        const features = trails.map(t => {
-            const coords = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
-            const geom = t.trailType === "Polygon"
-                ? new ol.geom.Polygon([coords])
-                : new ol.geom.LineString(coords);
-
-            const color = t.difficulty === "Easy" ? "green" :
-                          t.difficulty === "Moderate" ? "orange" :
-                          t.difficulty === "Hard" ? "red" : "blue";
-
-            const feature = new ol.Feature({
-                geometry: geom,
-                name: t.name,
-                id: t.id,
-                difficulty: t.difficulty
-            });
-
-            feature.setStyle(new ol.style.Style({
-                stroke: new ol.style.Stroke({ color: color, width: 3 }),
-                fill: t.trailType === "Polygon" ? new ol.style.Fill({ color: color + '55' }) : null
-            }));
-
-            return feature;
-        });
-
-        vectorSource.clear();
-        vectorSource.addFeatures(features);
+    // Funzione di utilità per mappare difficoltà a colori
+    function getColor(difficulty) {
+        // supporta sia valori numerici dell'enum che stringhe
+        if (difficulty === 1 || difficulty === 'Easy') return 'green';
+        if (difficulty === 2 || difficulty === 'Moderate') return 'orange';
+        if (difficulty === 3 || difficulty === 'Hard') return 'red';
+        // default / generic = 0
+        return 'blue';
     }
 
+    // --- Caricamento trail nell’extent (modificato per coordinata unica) ---
+    async function loadTrailsFromMapExtent() {
+        if (activeTrailFilter !== null) return;
+        const raw = map.getView().calculateExtent(map.getSize());
+        const buf = ol.extent.buffer(raw, ol.extent.getWidth(raw) * 0.5);
+        const bl = ol.proj.toLonLat(ol.extent.getBottomLeft(buf));
+        const tr = ol.proj.toLonLat(ol.extent.getTopRight(buf));
 
+        const res = await fetch(
+            `/api/trailsapi?minLon=${bl[0]}&minLat=${bl[1]}&maxLon=${tr[0]}&maxLat=${tr[1]}`
+        );
+        const trails = await res.json();
+
+        vectorSource.clear();
+        selectedFeature = null;
+
+        const feats = trails.map(t => {
+            let geom;
+            const coords = t.geometry.coordinates;
+            if (t.geometry.type === 'LineString') geom = new ol.geom.LineString(coords.map(c=>ol.proj.fromLonLat(c)));
+            else if (t.geometry.type === 'MultiLineString') geom = new ol.geom.MultiLineString(
+                coords.map(line=>line.map(c=>ol.proj.fromLonLat(c)))
+            );
+            else if (t.geometry.type === 'Polygon') geom = new ol.geom.Polygon(
+                coords.map(ring=>ring.map(c=>ol.proj.fromLonLat(c)))
+            );
+            else return null;
+
+            const color = getColor(t.difficulty);
+            const feat = new ol.Feature({ geometry: geom, name: t.name, id: t.id, difficulty: t.difficulty });
+            feat.setStyle(new ol.style.Style({
+                stroke: new ol.style.Stroke({ color, width: 3 }),
+                fill: t.geometry.type === 'Polygon' ? new ol.style.Fill({ color: color + '55' }) : null
+            }));
+            return feat;
+        }).filter(f=>f);
+
+        vectorSource.addFeatures(feats);
+    }
     window.addEventListener('DOMContentLoaded', loadTrailsFromMapExtent);
     map.on('moveend', loadTrailsFromMapExtent);
 
+
+    // Click per selezione
     map.on('singleclick', evt => {
-        if (drawActive) return;
-        const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
-        if (feature) {
-            document.getElementById('trailName').textContent = feature.get('name');
-            document.getElementById('trailDifficulty').textContent = feature.get('difficulty');
-            document.getElementById('trailId').value = feature.get('id');
-            document.getElementById('infoSidebar').style.display = 'block';
-        } else {
-            closeSidebar();
-        }
-    });
+         if (drawActive) return;
+         const f = map.forEachFeatureAtPixel(evt.pixel, feat=>feat);
+         if (f) {
+             selectedFeature = f;
+             document.getElementById('trailName').textContent = f.get('name');
+             document.getElementById('trailDifficulty').textContent = f.get('difficulty');
+             document.getElementById('trailId').value = f.get('id');
+             document.getElementById('infoSidebar').style.display = 'block';
+         } else {
+             selectedFeature = null;
+             closeSidebar();
+         }
+     });
 
-    function closeSidebar() {
-        document.getElementById('infoSidebar').style.display = 'none';
-    }
-
+    function closeSidebar() { document.getElementById('infoSidebar').style.display = 'none'; }
     async function deleteTrail() {
         const id = document.getElementById('trailId').value;
-        if (!id) return;
-        if (!confirm("Confermi l'eliminazione?")) return;
-
+        if (!id || !confirm("Confermi l'eliminazione?")) return;
         const res = await fetch(`/api/trailsapi/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-            loadTrailsFromMapExtent();
-            closeSidebar();
-        }
+        if (res.ok) { loadTrailsFromMapExtent(); closeSidebar(); }
     }
 
-    let drawActive = false;
-    let segments = [[]];
-    let ghostFeature = null;
-    let newTrailName = '';
-    let newTrailDifficulty = '';
 
+    // --- DRAWING MULTI-LINE & POLYGON ---
     function enableDrawing() {
         const name = prompt("Nome della trail:");
         if (!name) return;
-
         const difficulty = prompt("Difficoltà (Easy, Moderate, Hard):", "Moderate");
         if (!difficulty) return;
 
-        drawActive = true;
-        segments = [[]];
-        newTrailName = name;
+        drawActive         = true;
+        segments           = [[]];
+        newTrailName       = name;
         newTrailDifficulty = difficulty;
-        document.getElementById('drawNotification').style.display = 'block';
-        document.getElementById('cancelButton').style.display = 'inline-block';
-        map.getTargetElement().style.cursor = 'crosshair';
 
-        console.log("✏️ Modalità disegno attivata.");
+        document.getElementById('drawNotification').style.display = 'block';
+        document.getElementById('cancelButton').style.display    = 'inline-block';
+        map.getTargetElement().style.cursor                      = 'crosshair';
     }
 
     function cancelDrawing() {
         drawActive = false;
-        segments = [[]];
+        segments   = [[]];
         if (ghostFeature) {
             vectorSource.removeFeature(ghostFeature);
             ghostFeature = null;
         }
         document.getElementById('drawNotification').style.display = 'none';
-        document.getElementById('cancelButton').style.display = 'none';
-        map.getTargetElement().style.cursor = '';
-        console.log("❌ Disegno annullato.");
+        document.getElementById('cancelButton').style.display    = 'none';
+        map.getTargetElement().style.cursor                      = '';
     }
 
-    document.addEventListener('keydown', async function (event) {
-        if (event.key === 'Escape') {
-            cancelDrawing();
+    async function finalizeDrawing() {
+        drawActive = false;
+        document.getElementById('drawNotification').style.display = 'none';
+        document.getElementById('cancelButton').style.display    = 'none';
+        map.getTargetElement().style.cursor                      = '';
+
+        const validSegments = segments.filter(s => s.length > 1);
+        if (validSegments.length === 0) {
+            alert("Nessuna linea valida disegnata.");
+            return;
         }
 
-        if (event.key === 'Enter' && drawActive) {
-            drawActive = false;
-            document.getElementById('drawNotification').style.display = 'none';
-            document.getElementById('cancelButton').style.display = 'none';
-            map.getTargetElement().style.cursor = '';
+        let geometry, trailType;
 
-            const validSegments = segments.filter(s => s.length > 1);
-            if (validSegments.length === 0) {
-                alert("Nessuna linea valida disegnata.");
-                return;
-            }
-
-            const geometry = {
-                type: validSegments.length > 1 ? "MultiLineString" : "LineString",
-                coordinates: validSegments.length > 1 ? validSegments : validSegments[0]
+        if (validSegments.length === 1 && validSegments[0].length >= 4) {
+            // Poligono singolo
+            const ring = validSegments[0];
+            const first = ring[0], last = ring[ring.length - 1];
+            if (!(first[0] === last[0] && first[1] === last[1])) ring.push([...first]);
+            geometry = {
+                type: "Polygon",
+                coordinates: [ring.map(([lon, lat]) => [Number(lon), Number(lat)])]
             };
+            trailType = "Polygon";
 
-            const body = {
-                name: newTrailName,
-                difficulty: newTrailDifficulty,
-                trailType: geometry.type === "MultiLineString" ? "MultiLine" : "Line",
-                geometry: geometry
+        } else if (validSegments.length > 1) {
+            // Multilinea
+            geometry = {
+                type: "MultiLineString",
+                coordinates: validSegments.map(segment =>
+                    segment.map(([lon, lat]) => [Number(lon), Number(lat)])
+                )
             };
+            trailType = "MultiLine";
 
-            console.log("📦 Trail pronta da salvare:", JSON.stringify(body, null, 2));
-
-            try {
-                const res = await fetch('/api/trailsapi', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-
-                const result = await res.text();
-                console.log("📬 Risposta dal server:", res.status, result);
-
-                if (res.ok) {
-                    loadTrailsFromMapExtent();
-                } else {
-                    alert("Errore nel salvataggio. Controlla la console.");
-                }
-            } catch (err) {
-                console.error("❗ Errore durante il fetch:", err);
-            }
-
-            segments = [[]];
+        } else {
+            // Linea singola
+            geometry = {
+                type: "LineString",
+                coordinates: validSegments[0].map(([lon, lat]) => [Number(lon), Number(lat)])
+            };
+            trailType = "Line";
         }
-    });
 
+        const body = {
+            name:       newTrailName,
+            difficulty: newTrailDifficulty,
+            trailType,
+            geometry
+        };
+
+        try {
+            const res = await fetch('/api/trailsapi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (res.ok) {
+                loadTrailsFromMapExtent();
+            } else {
+                alert("Errore nel salvataggio. Controlla la console.");
+            }
+        } catch (err) {
+            console.error("❗ Errore durante il fetch:", err);
+        }
+
+        segments = [[]];
+        if (ghostFeature) {
+            vectorSource.removeFeature(ghostFeature);
+            ghostFeature = null;
+        }
+    }
+
+    document.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                if (drawActive) finalizeDrawing();
+                else if (modifyInteraction) finalizeEdit();
+            }
+            if (event.key === 'Escape') {
+                if (drawActive) cancelDrawing();
+                else if (modifyInteraction) cancelEditing();
+            }
+        });
+
+    // Click sinistro aggiunge punto
     map.on('click', evt => {
         if (!drawActive) return;
-        const coord = ol.proj.toLonLat(evt.coordinate);
-        segments[segments.length - 1].push(coord);
-    });
+        const coord         = ol.proj.toLonLat(evt.coordinate);
+        const currentSegment = segments[segments.length - 1];
 
-        // ... tutto il resto invariato sopra
-
-    map.on('pointermove', evt => {
-        if (!drawActive || segments.length === 0) return;
-
-        const allLines = [];
-        const mouseCoord = ol.proj.toLonLat(evt.coordinate);
-
-        // Linee fisse già disegnate
-        for (const segment of segments.slice(0, -1)) {
-            if (segment.length > 1) {
-                const coords = segment.map(c => ol.proj.fromLonLat(c));
-                allLines.push(new ol.geom.LineString(coords));
+        // chiusura automatica poligono
+        if (currentSegment.length > 2) {
+            const [x0,y0] = currentSegment[0];
+            const [x1,y1] = coord;
+            if (Math.hypot(x1-x0, y1-y0) < 0.0005) {
+                alert("Chiusura automatica: punto vicino al primo vertice. Poligono creato.");
+                currentSegment.push([...currentSegment[0]]);
+                return;
             }
         }
+        currentSegment.push(coord);
+    });
 
-        // Linea corrente con preview
-        const currentSegment = segments.at(-1);
-        if (currentSegment.length > 0) {
-            const preview = [...currentSegment, mouseCoord].map(c => ol.proj.fromLonLat(c));
-            allLines.push(new ol.geom.LineString(preview));
+    // Preview ghostFeature
+    map.on('pointermove', evt => {
+        if (!drawActive) return;
+        const allGeoms  = [];
+        const mouseCoord = ol.proj.toLonLat(evt.coordinate);
+
+        // segmenti già chiusi
+        for (const seg of segments.slice(0, -1)) {
+            if (seg.length > 1) {
+                const coords = seg.map(c => ol.proj.fromLonLat(c));
+                allGeoms.push(new ol.geom.LineString(coords));
+            }
+        }
+        // preview segmento corrente
+        const curr = segments[segments.length - 1];
+        if (curr.length > 0) {
+            const preview = [...curr, mouseCoord].map(c => ol.proj.fromLonLat(c));
+            allGeoms.push(new ol.geom.LineString(preview));
         }
 
-        // Unione di tutte le geometrie
-        const multi = new ol.geom.MultiLineString(allLines.map(line => line.getCoordinates()));
-
+        const multi = new ol.geom.MultiLineString(allGeoms.map(g => g.getCoordinates()));
         if (!ghostFeature) {
             ghostFeature = new ol.Feature({ geometry: multi });
             ghostFeature.setStyle(new ol.style.Style({
-                stroke: new ol.style.Stroke({ color: 'blue', width: 2, lineDash: [4, 4] })
+                stroke: new ol.style.Stroke({ color: 'blue', width: 2, lineDash: [4,4] })
             }));
             vectorSource.addFeature(ghostFeature);
         } else {
@@ -321,110 +373,103 @@
         }
     });
 
+    // Right-click: 1° chiude segmento, 2° finalizza
+    map.getViewport().addEventListener('contextmenu', evt => {
+        if (!drawActive) return;
+        evt.preventDefault();
+        const currentSegment = segments[segments.length - 1];
+        if (currentSegment.length === 0) {
+            // secondo click destro → salva
+            finalizeDrawing();
+        } else {
+            // primo click destro → chiudi segmento
+            console.log("✅ Segmento chiuso con", currentSegment.length, "punti.");
+            segments.push([]);
+        }
+    });
+
+    // Blocca click sinistro predefinito durante il disegno
     document.getElementById('map').addEventListener('click', evt => {
-        // Bloccato il click sinistro per l'aggiunta punti
         if (drawActive) evt.preventDefault();
     });
 
-    document.getElementById('map').addEventListener('contextmenu', evt => {
-        if (!drawActive) return;
-        evt.preventDefault();
-        const coordinate = ol.proj.toLonLat(map.getEventCoordinate(evt));
-        const currentSegment = segments.at(-1);
-
-        if (currentSegment.length === 0) {
-            console.log("👉 Primo punto del nuovo segmento.");
-        } else {
-            console.log("✅ Segmento chiuso con", currentSegment.length, "punti.");
-        }
-
-        segments.push([]);
-    });
-
-        let modifyInteraction = null;
+    // --- EDIT MODE (invariato) ---
 
     function enableEditMode() {
+        if (!selectedFeature) {
+            alert("Seleziona prima un trail cliccandoci sopra.");
+            return;
+        }
         if (modifyInteraction) map.removeInteraction(modifyInteraction);
-
-        modifyInteraction = new ol.interaction.Modify({ source: vectorSource });
+        const coll = new ol.Collection([selectedFeature]);
+        modifyInteraction = new ol.interaction.Modify({ features: coll });
         map.addInteraction(modifyInteraction);
-        alert("Modifica attiva: trascina vertici, poi premi ENTER per salvare.");
+        alert("Modifica attiva: trascina vertici, poi premi ENTER per salvare, ESC per annullare.");
     }
-
-        document.addEventListener('keydown', async function (event) {
-        if (event.key === 'Enter' && modifyInteraction) {
-            const features = vectorSource.getFeatures();
-
-            for (const feature of features) {
-                const id = feature.get('id');
-                const geom = feature.getGeometry();
-
-                let geometry, trailType;
-
-                if (geom instanceof ol.geom.LineString) {
-                    const coords = geom.getCoordinates().map(c => ol.proj.toLonLat(c));
-                    geometry = { type: 'LineString', coordinates: coords };
-                    trailType = 'Line';
-                } else if (geom instanceof ol.geom.MultiLineString) {
-                    const coords = geom.getCoordinates().map(line => line.map(c => ol.proj.toLonLat(c)));
-                    geometry = { type: 'MultiLineString', coordinates: coords };
-                    trailType = 'MultiLine';
-                } else if (geom instanceof ol.geom.Polygon) {
-                    const coords = geom.getCoordinates().map(ring => ring.map(c => ol.proj.toLonLat(c)));
-                    geometry = { type: 'Polygon', coordinates: coords };
-                    trailType = 'Polygon';
-                } else {
-                    alert("Tipo di geometria non supportato");
-                    return;
-                }
-
-                const body = {
-                    name: feature.get('name') ?? 'Modified Trail',
-                    difficulty: feature.get('difficulty') ?? 'Moderate',
-                    trailType,
-                    geometry
-                };
-
-                console.log("Trail aggiornata:", JSON.stringify(body, null, 2));
-
-                const res = await fetch(`/api/trailsapi/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-
-                if (!res.ok) {
-                    const error = await res.text();
-                    console.error("Errore server:", error);
-                    alert("Errore nel salvataggio della trail.");
-                }
-            }
-
-            alert("Trail modificata.");
+    function cancelEditing() {
+        if (modifyInteraction) {
             map.removeInteraction(modifyInteraction);
             modifyInteraction = null;
-            loadTrailsFromMapExtent();
         }
-    });
+        loadTrailsFromMapExtent();
+        alert("Modifica annullata.");
+    }
+    async function finalizeEdit() {
+        if (!selectedFeature) return;
+        const id = document.getElementById('trailId').value;
+        const name = document.getElementById('trailName').textContent;
+        const difficulty = document.getElementById('trailDifficulty').textContent;
+        const geom = selectedFeature.getGeometry();
+        let geometry;
+        const type = geom.getType();
+        if (type === "LineString") {
+            const coords = geom.getCoordinates().map(c => ol.proj.toLonLat(c));
+            geometry = { type: "LineString", coordinates: coords };
+        } else if (type === "MultiLineString") {
+            const coords = geom.getLineStrings().map(ls => ls.getCoordinates().map(c => ol.proj.toLonLat(c)));
+            geometry = { type: "MultiLineString", coordinates: coords };
+        } else if (type === "Polygon") {
+            const coords = geom.getCoordinates()[0].map(c => ol.proj.toLonLat(c));
+            geometry = { type: "Polygon", coordinates: [coords] };
+        } else {
+            alert("Tipo geometria non supportato per l'aggiornamento."); return;
+        }
+        const body = { name, difficulty, trailType: type.replace(/String$/,''), geometry };
+        try {
+            const res = await fetch(`/api/trailsapi/${id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (res.ok) {
+                map.removeInteraction(modifyInteraction);
+                modifyInteraction = null;
+                loadTrailsFromMapExtent(); closeSidebar();
+                alert("Modifiche salvate.");
+            } else {
+                alert("Errore nel salvataggio delle modifiche.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Errore nel fetch di aggiornamento.");
+        }
+    }
 
-        let trailDrawFilterInteraction = null;
-
+    // --- SPATIAL FILTER ---
+    let trailDrawFilterInteraction = null;
     function enableTrailSpatialFilter() {
         if (trailDrawFilterInteraction) {
             map.removeInteraction(trailDrawFilterInteraction);
         }
-
         trailDrawFilterInteraction = new ol.interaction.Draw({
             source: new ol.source.Vector(),
             type: 'Polygon'
         });
-
         map.addInteraction(trailDrawFilterInteraction);
 
         trailDrawFilterInteraction.on('drawend', async (event) => {
             const feature = event.feature;
-            const geom = feature.getGeometry();
-            const coords = geom.getCoordinates()[0].map(c => ol.proj.toLonLat(c));
+            const geom    = feature.getGeometry();
+            const coords  = geom.getCoordinates()[0].map(c => ol.proj.toLonLat(c));
 
             const geometryGeoJSON = {
                 type: 'Polygon',
@@ -440,17 +485,16 @@
             const trails = await response.json();
 
             const features = trails.map(t => {
-                const coords = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
-                const geom = t.trailType === "Polygon"
-                    ? new ol.geom.Polygon([coords])
-                    : new ol.geom.LineString(coords);
-
+                const pts = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
+                const g   = t.trailType === "Polygon"
+                            ? new ol.geom.Polygon([pts])
+                            : new ol.geom.LineString(pts);
                 return new ol.Feature({
-                    geometry: geom,
-                    name: t.name,
-                    id: t.id,
+                    geometry:   g,
+                    name:       t.name,
+                    id:         t.id,
                     difficulty: t.difficulty,
-                    trailType: t.trailType
+                    trailType:  t.trailType
                 });
             });
 
@@ -464,53 +508,106 @@
         alert("Disegna un'area per filtrare le trail.");
     }
 
-        async function loadTrailsByDifficulty(level) {
-
+    // --- FILTRI PER DIFFICOLTÀ ---
+    async function loadTrailsByDifficulty(level) {
         activeTrailFilter = level === 'All' ? null : level;
-        const extent = map.getView().calculateExtent(map.getSize());
-        const bottomLeft = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
-        const topRight = ol.proj.toLonLat(ol.extent.getTopRight(extent));
+
+        const extent    = map.getView().calculateExtent(map.getSize());
+        const buffer    = 0.01;
+        const bottomLeft= ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
+        const topRight  = ol.proj.toLonLat(ol.extent.getTopRight(extent));
+
+        const minLon = bottomLeft[0] - buffer;
+        const minLat = bottomLeft[1] - buffer;
+        const maxLon = topRight[0] + buffer;
+        const maxLat = topRight[1] + buffer;
 
         const url = level === 'All'
-            ? `/api/trailsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`
-            : `/api/trailsapi/bydifficulty?level=${level}&minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`;
+            ? `/api/trailsapi?minLon=${minLon}&minLat=${minLat}&maxLon=${maxLon}&maxLat=${maxLat}`
+            : `/api/trailsapi/bydifficulty?level=${level}&minLon=${minLon}&minLat=${minLat}&maxLon=${maxLon}&maxLat=${maxLat}`;
 
-        const res = await fetch(url);
+        const res    = await fetch(url);
         const trails = await res.json();
 
         const features = trails.map(t => {
-            const coords = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
-            const geom = t.trailType === "Polygon"
-                ? new ol.geom.Polygon([coords])
-                : new ol.geom.LineString(coords);
+            const pts = t.coordinates.map(c => ol.proj.fromLonLat([c.longitude, c.latitude]));
+            const g   = t.trailType === "Polygon"
+                        ? new ol.geom.Polygon([pts])
+                        : new ol.geom.LineString(pts);
 
-            const color = t.difficulty === "Easy" ? "green" :
-                          t.difficulty === "Moderate" ? "orange" : "red";
+            const color = level === 'All'
+                ? (t.difficulty === "Easy"    ? "green"
+                   : t.difficulty === "Moderate"? "yellow"
+                   : t.difficulty === "Hard"    ? "red"
+                   : "blue")
+                : (t.difficulty === "Easy"    ? "green"
+                   : t.difficulty === "Moderate"? "orange"
+                   : "red");
 
             const feature = new ol.Feature({
-                geometry: geom,
-                name: t.name,
-                id: t.id,
+                geometry:   g,
+                name:       t.name,
+                id:         t.id,
                 difficulty: t.difficulty
             });
 
             feature.setStyle(new ol.style.Style({
-                stroke: new ol.style.Stroke({
-                    color: color,
-                    width: 3
-                }),
-                fill: t.trailType === "Polygon"
-                    ? new ol.style.Fill({ color: color + '55' }) // trasparenza se polygon
-                    : null
+                stroke: new ol.style.Stroke({ color, width: 3 }),
+                fill:   t.trailType === "Polygon"
+                        ? new ol.style.Fill({ color: color + '55' })
+                        : null
             }));
 
             return feature;
         });
 
-        activeTrailFilter = 'Spatial';
         vectorSource.clear();
         vectorSource.addFeatures(features);
     }
 
+    // --- SOLO POLIGONI ---
+    async function loadOnlyPolygonTrails() {
+        activeTrailFilter = 'PolygonOnly';
 
+        const rawExtent = map.getView().calculateExtent(map.getSize());
+        const extent    = ol.extent.buffer(rawExtent, ol.extent.getWidth(rawExtent) * 0.3);
+        const bottomLeft= ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
+        const topRight  = ol.proj.toLonLat(ol.extent.getTopRight(extent));
+
+        const res    = await fetch(
+            `/api/trailsapi?minLon=${bottomLeft[0]}&minLat=${bottomLeft[1]}&maxLon=${topRight[0]}&maxLat=${topRight[1]}`
+        );
+        const trails = await res.json();
+
+        const polygonFeatures = trails
+          .filter(t => t.geometry.type === "Polygon")
+          .map(t => {
+              const rawRings = t.geometry.coordinates;
+              const rings    = rawRings.map(ring =>
+                  ring.map(c => ol.proj.fromLonLat(c))
+              );
+              const geom     = new ol.geom.Polygon(rings);
+
+              const color = t.difficulty === "Easy"    ? "green"
+                         : t.difficulty === "Moderate"? "orange"
+                         : t.difficulty === "Hard"    ? "red"
+                         : "blue";
+
+              const feat = new ol.Feature({
+                  geometry:   geom,
+                  name:       t.name,
+                  id:         t.id,
+                  difficulty: t.difficulty
+              });
+              feat.setStyle(new ol.style.Style({
+                  stroke: new ol.style.Stroke({ color, width: 3 }),
+                  fill:   new ol.style.Fill({ color: color + "55" })
+              }));
+              return feat;
+          });
+
+        vectorSource.clear();
+        vectorSource.addFeatures(polygonFeatures);
+    }
 </script>
+

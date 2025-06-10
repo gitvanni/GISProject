@@ -8,6 +8,7 @@ using GISProject.Models;
 using GISProject.Enumerations;
 using GISProject.Services.Geo;
 using NetTopologySuite.IO;
+using System.Linq;
 
 namespace GISProject.Api
 {
@@ -43,8 +44,11 @@ namespace GISProject.Api
                     t.Name,
                     t.Difficulty,
                     t.TrailType,
-                    Coordinates = _geometryMapper.MapCoordinates(t.Geometry)
-                        .Select(c => new { c.Latitude, c.Longitude })
+                    Geometry = new
+                    {
+                        type = t.Geometry.GeometryType,
+                        coordinates = _geometryMapper.MapRawCoordinates(t.Geometry)
+                    }
                 });
 
             return Ok(trails);
@@ -85,41 +89,39 @@ namespace GISProject.Api
                 var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
                 Geometry geometry;
 
-                if (trailType == TrailType.Line)
+                switch (trailType)
                 {
-                    var coords = coordinatesJson.EnumerateArray().Select(c =>
-                        new Coordinate(c[0].GetDouble(), c[1].GetDouble())).ToArray();
+                    case TrailType.Line:
+                        var coordsLine = coordinatesJson.EnumerateArray()
+                            .Select(c => new Coordinate(c[0].GetDouble(), c[1].GetDouble()))
+                            .ToArray();
+                        geometry = factory.CreateLineString(coordsLine);
+                        break;
 
-                    geometry = factory.CreateLineString(coords);
-                }
-                else if (trailType == TrailType.MultiLine)
-                {
-                    var segments = new List<LineString>();
-                    foreach (var line in coordinatesJson.EnumerateArray())
-                    {
-                        var coords = line.EnumerateArray().Select(c =>
-                            new Coordinate(c[0].GetDouble(), c[1].GetDouble())).ToArray();
+                    case TrailType.MultiLine:
+                        var segments = coordinatesJson.EnumerateArray().Select(line =>
+                            factory.CreateLineString(
+                                line.EnumerateArray()
+                                    .Select(c => new Coordinate(c[0].GetDouble(), c[1].GetDouble()))
+                                    .ToArray()
+                            )).ToArray();
+                        geometry = factory.CreateMultiLineString(segments);
+                        break;
 
-                        segments.Add(factory.CreateLineString(coords));
-                    }
+                    case TrailType.Polygon:
+                        var ringCoords = coordinatesJson[0].EnumerateArray()
+                            .Select(c => new Coordinate(c[0].GetDouble(), c[1].GetDouble()))
+                            .ToList();
 
-                    geometry = factory.CreateMultiLineString(segments.ToArray());
-                }
-                else if (trailType == TrailType.Polygon)
-                {
-                    var coords = coordinatesJson.EnumerateArray().Select(c =>
-                        new Coordinate(c[0].GetDouble(), c[1].GetDouble())).ToList();
+                        if (!ringCoords.First().Equals2D(ringCoords.Last()))
+                            ringCoords.Add(ringCoords.First());
 
-                    // Verifica se il poligono è chiuso, altrimenti chiudilo
-                    if (!coords.First().Equals2D(coords.Last()))
-                        coords.Add(coords.First());
+                        var ring = factory.CreateLinearRing(ringCoords.ToArray());
+                        geometry = factory.CreatePolygon(ring);
+                        break;
 
-                    var ring = factory.CreateLinearRing(coords.ToArray());
-                    geometry = factory.CreatePolygon(ring);
-                }
-                else
-                {
-                    return BadRequest("Tipo di trail non supportato");
+                    default:
+                        return BadRequest("Tipo geometria non riconosciuto.");
                 }
 
                 var trail = new Trail
@@ -141,6 +143,7 @@ namespace GISProject.Api
                 return StatusCode(500, $"Errore durante il salvataggio: {ex.Message}");
             }
         }
+
 
         // PUT - update existing trail
         [HttpPut("{id}")]
@@ -313,7 +316,5 @@ namespace GISProject.Api
 
             return Ok(trails);
         }
-
-
     }
 }

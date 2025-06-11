@@ -603,7 +603,6 @@
                 return; 
             }
             circleSource.addFeature(new ol.Feature(new ol.geom.Circle(evt.coordinate,r)));
-            console.log(r)
             const pois = await getNearbyPoints(longitude,latitude,r);
             console.log(pois)
             const features = pois.map(poi => {

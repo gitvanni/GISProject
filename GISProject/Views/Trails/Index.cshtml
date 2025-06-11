@@ -10,19 +10,79 @@
             margin: 0;
             padding: 0;
             height: 100%;
-            width: 100%;
             overflow: hidden;
             font-family: sans-serif;
         }
 
         #map {
             position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            width: 100%;
-            z-index: 0;
+            inset: 0;
         }
+
+        .controls-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+        }
+
+        .filters-panel {
+            position: absolute;
+            top: 10px;
+            left: 220px;
+            z-index: 1000;
+        }
+
+            .controls-panel details, .filters-panel details {
+                background: rgba(255,255,255,0.9);
+                border-radius: 4px;
+                margin-bottom: 6px;
+                padding: 6px 8px;
+                width: 200px;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            }
+
+            .controls-panel summary, .filters-panel summary {
+                font-weight: bold;
+                cursor: pointer;
+                margin: -6px -8px 6px;
+                padding: 6px 8px;
+                list-style: none;
+            }
+
+            .controls-panel button, .controls-panel input,
+            .filters-panel button, .filters-panel input {
+                width: 100%;
+                margin: 4px 0;
+                padding: 6px;
+                font-size: 13px;
+                box-sizing: border-box;
+            }
+
+        #drawNotification {
+            display: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            z-index: 1000;
+        }
+
+        #legend {
+            background: rgba(255,255,255,0.9);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+            #legend ul {
+                margin: 4px 0 0 16px;
+                padding: 0;
+            }
 
         #infoSidebar {
             position: absolute;
@@ -30,97 +90,87 @@
             right: 0;
             width: 280px;
             height: 100%;
-            background-color: rgba(255, 255, 255, 0.95);
+            background: rgba(255,255,255,0.95);
             border-left: 1px solid #ccc;
             padding: 16px;
             display: none;
-            z-index: 10;
-        }
-
-        .top-controls {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 11;
-            background-color: rgba(255,255,255,0.9);
-            padding: 10px;
-            border-radius: 6px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.2);
-        }
-
-            .top-controls button {
-                margin: 3px;
-                padding: 6px 10px;
-                font-size: 14px;
-                cursor: pointer;
-            }
-
-        #legend {
-            margin-top: 10px;
-            font-size: 13px;
-        }
-
-        #drawNotification {
-            font-weight: bold;
-            color: #005fa3;
-            display: none;
-        }
-
-        #cancelButton {
-            display: none;
-            background-color: #ccc;
-            border: none;
-            padding: 5px 10px;
-            margin-top: 5px;
-            cursor: pointer;
+            z-index: 1000;
         }
     </style>
 </head>
 <body>
-    <div class="top-controls">
-        <div>
+    <div id="map"></div>
+
+    <div class="controls-panel">
+        <details>
+            <summary>Operazioni</summary>
             <button onclick="enableDrawing()">Disegna Trail</button>
-            <button onclick="enableEditMode()">✏️ Modifica Trail</button>
-            <button onclick="enableTrailSpatialFilter()">🔍 Filtra Spaziale</button>
-            <button id="cancelButton" onclick="cancelDrawing()">Annulla (ESC)</button>
+            <button onclick="enableEditMode()">Modifica Trail</button>
+            <button onclick="enableTrailSpatialFilter()">Filtro Spaziale</button>
+            <button id="cancelButton" onclick="cancelDrawing()">Annulla</button>
             <button onclick="loadOnlyPolygonTrails()">Solo Poligoni</button>
-        </div>
-        <div class="difficulty-filters">
-            <button onclick="loadTrailsByDifficulty('All')">All</button>
+        </details>
+        <details>
+            <summary>Filtri Difficoltà</summary>
+            <button onclick="loadTrailsByDifficulty('All')">Tutti</button>
             <button onclick="loadTrailsByDifficulty('Easy')">Easy</button>
             <button onclick="loadTrailsByDifficulty('Moderate')">Moderate</button>
             <button onclick="loadTrailsByDifficulty('Hard')">Hard</button>
-        </div>
-        <div id="drawNotification">✏️ Disegna trail attivo</div>
-        <div id="legend">
-            <strong>Legenda:</strong>
-            <ul>
-                <li>🖱️ Sinistro: aggiungi punto</li>
-                <li>🖱️ Destro (1° click): chiudi segmento</li>
-                <li>🖱️ Destro (2° click): salva trail</li>
-                <li>⎋ ESC: annulla</li>
-            </ul>
-        </div>
+        </details>
     </div>
 
-    <div id="map"></div>
+    <div class="filters-panel">
+        <details open>
+            <summary>Filtri Avanzati</summary>
 
+            <input id="minArea" placeholder="Area ≥ (m²)" type="number" />
+            <button onclick="loadTrailsByArea()">Filtra Area</button>
+
+            <input id="minLength" placeholder="Lunghezza ≥ (m)" type="number" />
+            <button onclick="loadTrailsByLength()">Filtra Lunghezza</button>
+
+            <input id="nearestCount" placeholder="N vicini" type="number" />
+            <button onclick="enableNearestMode()">Seleziona Trail per Vicini</button>
+
+            <div id="legend">
+                <strong>Legenda:</strong>
+                <ul>
+                    <li>🖱️ Sinistro: aggiungi punto</li>
+                    <li>🖱️ Destro (1° click): chiudi segmento</li>
+                    <li>🖱️ Destro (2° click): salva trail</li>
+                    <li>⎋ ESC: annulla</li>
+                </ul>
+            </div>
+        </details>
+    </div>
+
+    <div id="drawNotification">✏️ Disegna trail attivo</div>
     <div id="infoSidebar">
         <h3>Trail Info</h3>
         <p><strong>Nome:</strong> <span id="trailName"></span></p>
         <p><strong>Difficoltà:</strong> <span id="trailDifficulty"></span></p>
         <input type="hidden" id="trailId" />
-        <button onclick="deleteTrail()" style="background: red; color: white;">Elimina</button>
+        <button onclick="deleteTrail()" style="background:#c00;color:#fff;">Elimina</button>
         <button onclick="closeSidebar()">Chiudi</button>
     </div>
-</body>
 
 <script>
 
-    let activeTrailFilter = null;
+         let activeTrailFilter = null;
+        let nearestMode = 0;
         const vectorSource = new ol.source.Vector();
-        const vectorLayer = new ol.layer.Vector({ source: vectorSource, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'blue', width: 2 }) }) });
-        const map = new ol.Map({ target: 'map', layers: [ new ol.layer.Tile({ source: new ol.source.OSM() }), vectorLayer ], view: new ol.View({ center: ol.proj.fromLonLat([12.5, 42.5]), zoom: 6 }) });
+        const vectorLayer  = new ol.layer.Vector({
+          source: vectorSource,
+          style: feature => new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: getColor(feature.get('difficulty')), width: 3 }),
+            fill: feature.get('trailType')==='Polygon' ? new ol.style.Fill({ color: getColor(feature.get('difficulty')) + '33' }) : null
+          })
+        });
+        const map = new ol.Map({
+          target: 'map',
+          layers: [ new ol.layer.Tile({ source: new ol.source.OSM() }), vectorLayer ],
+          view: new ol.View({ center: ol.proj.fromLonLat([12.5,42.5]), zoom:6 })
+        });
 
         // Stato editing
         let drawActive = false;
@@ -608,6 +658,209 @@
 
         vectorSource.clear();
         vectorSource.addFeatures(polygonFeatures);
+
     }
+
+        // 1) Attribute-based filter
+    async function loadTrailsByAttribute() {
+        const field = document.getElementById('attrField').value.trim();
+        const value = document.getElementById('attrValue').value.trim();
+        if (!field || !value) { alert('Inserisci campo e valore'); return; }
+        activeTrailFilter = 'attribute';
+        const extent = map.getView().calculateExtent(map.getSize());
+        const bl = ol.proj.toLonLat(ol.extent.getBottomLeft(extent));
+        const tr = ol.proj.toLonLat(ol.extent.getTopRight(extent));
+        const url = `/api/trailsapi/filter?filterField=${encodeURIComponent(field)}` +
+                    `&filterValue=${encodeURIComponent(value)}` +
+                    `&minLon=${bl[0]}&minLat=${bl[1]}&maxLon=${tr[0]}&maxLat=${tr[1]}`;
+        const res = await fetch(url);
+        const trails = await res.json();
+        renderFeatures(trails);
+    }
+
+        // Reset filter on map move
+        map.on('moveend', () => {
+            if (!activeTrailFilter) {
+                loadTrailsFromMapExtent();
+            }
+        });
+
+                // — filtro Area (byarea) con filtro spaziale e conversione m²→gradi² —
+        async function loadTrailsByArea() {
+          const rawInput = document.getElementById('minArea').value;
+          const minAreaM2 = parseFloat(rawInput);
+          if (isNaN(minAreaM2)) return alert('Area non valida');
+          activeTrailFilter = 'area';
+
+          // 1) calcolo extent in lon/lat
+          const ext = map.getView().calculateExtent(map.getSize());
+          const bl  = ol.proj.toLonLat(ol.extent.getBottomLeft(ext));
+          const tr  = ol.proj.toLonLat(ol.extent.getTopRight(ext));
+
+          // 2) conversione approssimativa da m² a gradi² (1° ≃ 111320 m)
+          const METERS_PER_DEGREE = 111_320;
+          const minAreaDeg2 = minAreaM2 / (METERS_PER_DEGREE * METERS_PER_DEGREE);
+          console.log(`[Area] filtro ≥ ${minAreaM2} m² → ≥ ${minAreaDeg2.toFixed(8)}°²`);
+
+          // 3) fetch con bounding‐box
+          const url = `/api/trailsapi/byarea`
+                    + `?minArea=${minAreaDeg2}`
+                    + `&minLon=${bl[0]}&minLat=${bl[1]}`
+                    + `&maxLon=${tr[0]}&maxLat=${tr[1]}`;
+          console.log('[Area] fetch URL:', url);
+
+          const data = await (await fetch(url)).json();
+          console.log('[Area] raw JSON:', data);
+
+          // 4) mapping e render
+          const trails = data.map(t => {
+            const coordsJson = t.coordinates ?? t.Coordinates;
+            const coords = coordsJson.map(c => [
+              c.longitude ?? c.Longitude,
+              c.latitude  ?? c.Latitude
+            ]);
+            return {
+              coordinates: coords,
+              trailType:   t.trailType  ?? t.TrailType,
+              difficulty:  t.difficulty ?? t.Difficulty
+            };
+          });
+
+          console.log('[Area] mapped trails:', trails);
+          renderFeatures(trails);
+        }
+
+
+        // — filtro Lunghezza (bylength) con conversione metri→gradi —
+         async function loadTrailsByLength() {
+          const rawInput  = document.getElementById('minLength').value;
+          const minLength = parseFloat(rawInput);
+          if (isNaN(minLength)) return alert('Lunghezza non valida');
+
+          activeTrailFilter = 'length';
+
+          // recupera extent in lon/lat
+          const ext  = map.getView().calculateExtent(map.getSize());
+          const bl   = ol.proj.toLonLat(ol.extent.getBottomLeft(ext));
+          const tr   = ol.proj.toLonLat(ol.extent.getTopRight(ext));
+
+          // conversione m → gradi (se usi ancora geometry)
+          const METERS_PER_DEGREE = 111_320;
+          const minDeg = minLength / METERS_PER_DEGREE;
+
+          const url = `/api/trailsapi/bylength`
+                    + `?minLength=${minDeg}`
+                    + `&minLon=${bl[0]}&minLat=${bl[1]}`
+                    + `&maxLon=${tr[0]}&maxLat=${tr[1]}`;
+
+          console.log('[Length] fetch URL:', url);
+          const data = await (await fetch(url)).json();
+
+          const trails = data.map(t => {
+            const coordsJson = t.coordinates ?? t.Coordinates;
+            const coords = coordsJson.map(c => [
+              c.longitude ?? c.Longitude,
+              c.latitude  ?? c.Latitude
+            ]);
+            return {
+              coordinates: coords,
+              trailType:   t.trailType  ?? t.TrailType,
+              difficulty:  t.difficulty ?? t.Difficulty
+            };
+          });
+
+          renderFeatures(trails);
+        }
+
+        // — filtro Nearest (nearest) con debug —
+        function enableNearestMode() {
+          const rawInput = document.getElementById('nearestCount').value;
+          console.log('[Nearest] raw input:', rawInput);
+
+          const n = parseInt(rawInput);
+          if (isNaN(n) || n < 1) {
+            console.error('[Nearest] N non valido:', rawInput);
+            return alert('Inserisci N vicini valido');
+          }
+          console.log('[Nearest] N parsed:', n);
+          nearestMode = n;
+
+          document.getElementById('drawNotification').textContent = '📍 Clicca su un trail';
+          document.getElementById('drawNotification').style.display = 'block';
+          map.getTargetElement().style.cursor = 'pointer';
+
+          map.once('singleclick', async evt => {
+            console.log('[Nearest] click pixel:', evt.pixel);
+            const f = map.forEachFeatureAtPixel(evt.pixel, feat => feat);
+            if (!f) {
+              console.warn('[Nearest] nessuna feature trovata');
+              alert('Seleziona una trail esistente');
+            } else {
+              console.log('[Nearest] feature selezionata:', f);
+              const geom = f.getGeometry();
+              const center = (geom.getType() === 'Polygon')
+                ? ol.extent.getCenter(geom.getExtent())
+                : geom.getCoordinateAt(0.5);
+              console.log('[Nearest] center in map coords:', center);
+
+              const [lon, lat] = ol.proj.toLonLat(center);
+              console.log('[Nearest] center lon/lat:', lon, lat);
+
+              try {
+                const url = `/api/trailsapi/nearest?lon=${lon}&lat=${lat}&n=${n}`;
+                console.log('[Nearest] fetch URL:', url);
+                const res  = await fetch(url);
+                console.log('[Nearest] response status:', res.status);
+                const data = await res.json();
+                console.log('[Nearest] raw JSON:', data);
+
+                const trails = data.map((t,i) => {
+                  const coordsJson = t.coordinates ?? t.Coordinates;
+                  console.log(`[Nearest][${i}] coordsJson:`, coordsJson);
+                  const coords = coordsJson.map((c,j) => {
+                    const lon = c.longitude ?? c.Longitude;
+                    const lat = c.latitude  ?? c.Latitude;
+                    console.log(`[Nearest][${i}][pt${j}] lon,lat =`, lon, lat);
+                    return [lon, lat];
+                  });
+                  const trailType  = t.trailType  ?? t.TrailType;
+                  const difficulty = t.difficulty ?? t.Difficulty;
+                  console.log(`[Nearest][${i}] trailType,difficulty =`, trailType, difficulty);
+                  return { coordinates: coords, trailType, difficulty };
+                });
+
+                console.log('[Nearest] mapped trails:', trails);
+                renderFeatures(trails);
+
+              } catch (err) {
+                console.error('[Nearest] errore fetch:', err);
+              }
+            }
+
+            // reset state
+            nearestMode = 0;
+            map.getTargetElement().style.cursor = '';
+            document.getElementById('drawNotification').style.display = 'none';
+          });
+        }
+
+
+
+        // Render helper
+        function renderFeatures(trails) {
+          vectorSource.clear();
+          trails.forEach(t => {
+            const pts = t.coordinates.map(c => ol.proj.fromLonLat(c));
+            let geom;
+            if (t.trailType==='Polygon') geom = new ol.geom.Polygon([pts]);
+            else if (t.trailType==='MultiLine') geom = new ol.geom.MultiLineString([pts]);
+            else geom = new ol.geom.LineString(pts);
+            const feat = new ol.Feature({ geometry: geom, trailType: t.trailType, difficulty: t.difficulty });
+            vectorSource.addFeature(feat);
+          });
+        }
+
 </script>
+</body>
+</html>
 

@@ -316,5 +316,164 @@ namespace GISProject.Api
 
             return Ok(trails);
         }
+
+        [HttpGet("filter")]
+        public IActionResult Filter(
+            [FromQuery] string filterField,
+            [FromQuery] string filterValue,
+            [FromQuery] double minLon, [FromQuery] double minLat,
+            [FromQuery] double maxLon, [FromQuery] double maxLat)
+        {
+            var envelope = new Envelope(minLon, maxLon, minLat, maxLat);
+            var box = Geometry.DefaultFactory.ToGeometry(envelope);
+            box.SRID = 4326;
+
+            var query = _context.Trails
+                                .Where(t => t.Geometry != null && t.Geometry.Intersects(box));
+
+            switch (filterField.ToLower())
+            {
+                case "name":
+                    query = query.Where(t => t.Name.Contains(filterValue));
+                    break;
+                case "difficulty":
+                    if (Enum.TryParse<DifficultyLevel>(filterValue, true, out var d))
+                        query = query.Where(t => t.Difficulty == d);
+                    else
+                        return BadRequest("Valore di difficulty non valido.");
+                    break;
+                case "trailtype":
+                    if (Enum.TryParse<TrailType>(filterValue, true, out var tt))
+                        query = query.Where(t => t.TrailType == tt);
+                    else
+                        return BadRequest("Valore di trailType non valido.");
+                    break;
+                default:
+                    return BadRequest("filterField non supportato.");
+            }
+
+            var result = query
+                .Take(500)
+                .AsEnumerable()
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Name,
+                    t.Difficulty,
+                    t.TrailType,
+                    Coordinates = _geometryMapper.MapCoordinates(t.Geometry)
+                                     .Select(c => new { c.Latitude, c.Longitude })
+                });
+
+            return Ok(result);
+        }
+
+        // 2) Filtro per area (solo poligoni)
+        // GET api/trailsapi/byarea?minArea=10000
+        // GET api/trailsapi/byarea?minArea=…&minLon=…&minLat=…&maxLon=…&maxLat=…
+        [HttpGet("byarea")]
+        public IActionResult GetByArea(
+            [FromQuery] double minArea,
+            [FromQuery] double minLon, [FromQuery] double minLat,
+            [FromQuery] double maxLon, [FromQuery] double maxLat)
+        {
+            var env = new Envelope(minLon, maxLon, minLat, maxLat);
+            var box = Geometry.DefaultFactory.ToGeometry(env);
+            box.SRID = 4326;
+
+            var trails = _context.Trails
+                .Where(t =>
+                    t.Geometry != null
+                    && t.TrailType == TrailType.Polygon
+                    && t.Geometry.Intersects(box)
+                    && t.Geometry.Area >= minArea
+                )
+                .Take(500)
+                .AsEnumerable()
+                .Select(t => new {
+                    t.Id,
+                    t.Name,
+                    t.Difficulty,
+                    t.TrailType,
+                    Area = t.Geometry.Area,
+                    Coordinates = _geometryMapper
+                        .MapCoordinates(t.Geometry)
+                        .Select(c => new { c.Latitude, c.Longitude })
+                });
+
+            return Ok(trails);
+        }
+
+        // 3) Filtro per lunghezza (solo linee e multilinee)
+        // GET api/trailsapi/bylength?minLength=500
+        [HttpGet("bylength")]
+        public IActionResult GetByLength(
+        [FromQuery] double minLength,
+        [FromQuery] double minLon, [FromQuery] double minLat,
+        [FromQuery] double maxLon, [FromQuery] double maxLat)
+        {
+            var env = new Envelope(minLon, maxLon, minLat, maxLat);
+            var box = Geometry.DefaultFactory.ToGeometry(env);
+            box.SRID = 4326;
+
+            var trails = _context.Trails
+                .Where(t =>
+                    t.Geometry != null
+                    && (t.TrailType == TrailType.Line || t.TrailType == TrailType.MultiLine)
+                    && t.Geometry.Intersects(box)
+                    && t.Geometry.Length >= minLength
+                )
+                .Take(500)
+                .AsEnumerable()
+                .Select(t => new {
+                    t.Id,
+                    t.Name,
+                    t.Difficulty,
+                    t.TrailType,
+                    Length = t.Geometry.Length,
+                    Coordinates = _geometryMapper
+                        .MapCoordinates(t.Geometry)
+                        .Select(c => new { c.Latitude, c.Longitude })
+                });
+
+            return Ok(trails);
+        }
+
+        // 4) Nearest-neighbor: N trail più vicini a un punto
+        // GET api/trailsapi/nearest?lon=12.5&lat=42.5&n=5
+        [HttpGet("nearest")]
+        public IActionResult GetNearest(
+            [FromQuery] double lon,
+            [FromQuery] double lat,
+            [FromQuery] int n = 5)
+        {
+            var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            var pt = factory.CreatePoint(new Coordinate(lon, lat));
+            pt.SRID = 4326;
+
+            var nearest = _context.Trails
+                .Where(t => t.Geometry != null)
+                .Select(t => new
+                {
+                    Trail = t,
+                    Distance = t.Geometry.Distance(pt)
+                })
+                .OrderBy(x => x.Distance)
+                .Take(n)
+                .AsEnumerable()
+                .Select(x => new
+                {
+                    x.Trail.Id,
+                    x.Trail.Name,
+                    x.Trail.Difficulty,
+                    x.Trail.TrailType,
+                    Distance = x.Distance,
+                    Coordinates = _geometryMapper.MapCoordinates(x.Trail.Geometry)
+                                     .Select(c => new { c.Latitude, c.Longitude })
+                });
+
+            return Ok(nearest);
+        }
+
     }
 }

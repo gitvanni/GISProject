@@ -186,5 +186,65 @@ namespace GISProject.Api
             }
         }
 
+        //Retrieves all the points within the radius
+        [HttpGet("nearby")]
+        public IActionResult GetNearbyPoints(double longitude, double latitude, double radiusMeters)
+        {
+            var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            var userLocation = geometryFactory.CreatePoint(new Coordinate(longitude, latitude));
+
+            double radiusDegrees = radiusMeters / 111320.0;
+
+
+
+            var nearbyPoints = _context.PointsOfInterest
+                 .Include(p => p.PoiCategories)
+                 .Where(p => p.Geometry != null &&
+                             p.Geometry.Distance(userLocation) <= radiusDegrees)
+                 .ToList()
+                 .Select(p =>
+                 {
+                     var point = (Point)p.Geometry!;
+                     return new
+                     {
+                         p.Id,
+                         p.Name,
+                         Latitude = point.Y,
+                         Longitude = point.X,
+                         Categories = p.PoiCategories.Select(c => c.Category.ToString()).ToList()
+                     };
+                 });
+            return Ok(nearbyPoints);
+        }
+
+        //Retrieves nearest N points
+        [HttpGet("nearest")]
+        public IActionResult GetNearestPoints(double longitude, double latitude, int count = 5)
+        {
+            var geometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
+            var userLocation = geometryFactory.CreatePoint(new Coordinate(longitude, latitude));
+
+            var nearestPoints = _context.PointsOfInterest
+                .Include(p => p.PoiCategories)
+                .Where(p => p.Geometry != null)
+                .OrderBy(p => p.Geometry!.Distance(userLocation))
+                .Take(count)
+                .ToList()
+                .Select(p =>
+                {
+                    var point = (Point)p.Geometry!;
+                    return new
+                    {
+                        p.Id,
+                        p.Name,
+                        Latitude = point.Y,
+                        Longitude = point.X,
+                        Categories = p.PoiCategories.Select(c => c.Category.ToString()).ToList()
+                    };
+                });
+
+            return Ok(nearestPoints);
+        }
+
     }
 }

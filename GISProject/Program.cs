@@ -1,15 +1,28 @@
 using GISProject.Data;
-using GISProject.Services.Geo;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using NetTopologySuite.IO.Converters;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddScoped<IGeometryMapper, DefaultGeometryMapper>();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(opts =>
+    {
+        // camelCase per le proprietà
+        opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        // converter GeoJSON per Geometry NTS
+        opts.JsonSerializerOptions.Converters.Add(new GeoJsonConverterFactory());
+        // enum come stringhe
+        opts.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+    });
 
 var app = builder.Build();
 

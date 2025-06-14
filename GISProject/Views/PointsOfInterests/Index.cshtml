@@ -84,6 +84,7 @@
 <div id="infoSidebar">
     <h3>Point Info</h3>
     <p><strong>Name:</strong> <span id="infoName"></span></p>
+    <p><strong>Description:</strong> <span id="infoDescription"></span></p>
     <p><strong>Latitude:</strong> <span id="infoLat"></span></p>
     <p><strong>Longitude:</strong> <span id="infoLon"></span></p>
     <p><strong>Categories:</strong> <span id="infoCat"></span></p>
@@ -172,46 +173,17 @@
 
 
 <script>
-    let vectorSource = new ol.source.Vector();
-
+    // -- Inizializzazione OpenLayers ------------------------------------------
+    const vectorSource = new ol.source.Vector();
     const vectorLayer = new ol.layer.Vector({
         source: vectorSource,
-        style: new ol.style.Style({
-            image: new ol.style.Circle({
-                radius: 3,
-                fill: new ol.style.Fill({ color: 'green' }),
-                stroke: null
-            })
-        })
+        style: feature => defaultStyle()  // stile di default per i POI
     });
-
     const circleSource = new ol.source.Vector();
-    const circleLayer = new ol.layer.Vector({ 
-        source: circleSource, 
-        style: circleStyle 
+    const circleLayer = new ol.layer.Vector({
+        source: circleSource,
+        style: circleStyle
     });
-
-    function highlightStyle(){
-        return new ol.style.Style({
-            image:new ol.style.Circle({
-                radius:7,
-                fill:new ol.style.Fill({
-                    color:'red'
-                })
-            })
-        });
-    }
-
-    function circleStyle(){
-        return new ol.style.Style({
-            stroke:new ol.style.Stroke({
-                color:'blue',
-                width:2,
-                lineDash:[4,4]
-            })
-        });
-    }
-
     const map = new ol.Map({
         target: 'map',
         layers: [
@@ -225,456 +197,245 @@
         })
     });
 
-    //Clear All Features on Map
-    function clearAllVectorSources() {
-        map.getLayers().forEach(layer => {
-            const source = layer.getSource?.();
-            if (source && source instanceof ol.source.Vector) {
-                source.clear();
-            }
+    // Stili
+    function defaultStyle() {
+        return new ol.style.Style({
+            image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: 'green' }) })
+        });
+    }
+    function highlightStyle() {
+        return new ol.style.Style({
+            image: new ol.style.Circle({ radius: 7, fill: new ol.style.Fill({ color: 'red' }) })
+        });
+    }
+    function circleStyle() {
+        return new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: 'blue', width: 2, lineDash: [4,4] })
         });
     }
 
-    //Open Category Menu
-    function openCategorySelector() {
-      document.getElementById("categoryMenu").style.display = "block";
-    }
-
-    //Close Category Menu
-    function closeCategorySelector() {
-      document.getElementById("categoryMenu").style.display = "none";
-    }
-
-
-    //Load Points Based on Selected Categories
-    async function loadSelectedCategories() {
-      const checkboxes = document.querySelectorAll('#categoryMenu input[type="checkbox"]:checked');
-      const selectedCategories = Array.from(checkboxes).map(cb => cb.value);
-
-      for (const cat of selectedCategories) {
-        const url = `../../api/pointsofinterestsapi/points?category=${cat}`;
-        const response = await fetch(url);
-        const pois = await response.json();
-
-        const color = getColorForCategory(cat);
-
-        const features = pois.map(poi => {
-          const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-          const feature = new ol.Feature({
-            geometry,
-            name: poi.name,
-            id: poi.id,
-            latitude: poi.latitude,
-            longitude: poi.longitude,
-            categories: poi.categories
-          });
-
-          return feature;
-        });
-
-        const layer = new ol.layer.Vector({
-          source: new ol.source.Vector({
-            features
-          }),
-          style: new ol.style.Style({
-            image: new ol.style.Circle({
-              radius: 3,
-              fill: new ol.style.Fill({ color }),
-              stroke: null
-            })
-          })
-        });
-
-        map.addLayer(layer);
-      }
-
-      document.getElementById("categoryMenu").style.display = "none";
-    }
-
-
-    //Associates a Color to Each Category
-    function getColorForCategory(category) {
-        const categoryColors = {
-            0: '#808080',  // Generic - gray
-            1: '#1E90FF',  // DrinkingWater - blue
-            2: '#A0522D',  // Shelter - sienna
-            3: '#8B0000',  // Toilet - dark red
-            4: '#FF4500',  // Restaurant - orange red
-            5: '#FF69B4',  // Bar - hot pink
-            6: '#FFD700',  // Viewpoint - gold
-            7: '#228B22',  // CampSite - forest green
-            8: '#A9A9A9',  // Bench - dark gray
-            9: '#00CED1',  // Info - dark turquoise
-            10: '#2F4F4F', // Parking - dark slate gray
-            11: '#32CD32', // PicnicSite - lime green
-            12: '#B22222', // Fireplace - firebrick
-            13: '#708090', // Ruin - slate gray
-            14: '#8A2BE2', // Summit - blue violet
-            15: '#00BFFF', // Waterfall - deep sky blue
-            16: '#A52A2A', // Bridge - brown
-            17: '#6B8E23', // Gate - olive drab
-            18: '#DAA520', // Cross - goldenrod
-            19: '#696969', // Cave - dim gray
-            20: '#DC143C', // Danger - crimson
-            21: '#4169E1'  // Signpost - royal blue
-        };
-
-        return categoryColors[category] || '#000000'; // default to black
-    }
-
-    //AGGIUNGERE CHE SE SI STA DISEGNANDO NON VIENE ATTIVATO L'EVENTO
-
-    //Evento che permette di visualizzare la sidebar se si clicca su un punto
-    map.on('singleclick', function (evt) {
-      map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
-          // Extract info
-          const name = feature.get('name');
-          const lat = feature.get('latitude');
-          const lon = feature.get('longitude');
-          const cat = feature.get('categories');
-          const id = feature.get('id');
-
-          // Fill in the sidebar
-          document.getElementById('infoName').textContent = name;
-          document.getElementById('infoLat').textContent = lat.toFixed(6);
-          document.getElementById('infoLon').textContent = lon.toFixed(6);
-          document.getElementById('infoCat').textContent = cat.join(',');
-          document.getElementById('infoPointId').value = id;
-
-          // Show the sidebar
-          document.getElementById('infoSidebar').style.display = 'block';
-      });
-    });
-
-
-    //Close InfoSideBar
-    function closeSidebar() {
-         document.getElementById('infoSidebar').style.display = 'none';
-    }
-
-
-
-    map.on('click', function (evt) {
-         const feature = map.forEachFeatureAtPixel(evt.pixel, (f, l) => l === vectorLayer ? f : null);
-         if (!feature) {
-             closeSidebar();
-         }
-    });
-
-
-     //variabile di supporto. se è false non è possibile aggiungere un punto cliccando sulla mappa
-    let addMode = false;
-
-
-    //funzione di supporto per abilitare l'aggiunta di un punto
-    function enableAddMode() {
-        addMode = true;
-        alert("Click on the map to add a new point.");
-    }
-
-
-    //Function to Add a Point
-    function addPoint(){
-        enableAddMode();
-         //se la addmode è true cliccando sulla mappa si può aggiungere un punto
-        map.on('click', function (evt) {
-            if (!addMode) return;
-
-            //se si sta disegnando un poligono per il filtro allora non è possibile aggiungere un punto
-            if(drawFilterInteraction){
-                addMode = false;
-                alert("You can't add a point now!")
-                return;
-            }
-
-        const coords = ol.proj.toLonLat(evt.coordinate);
-        const lon = coords[0].toFixed(6);
-        const lat = coords[1].toFixed(6);
-
-        document.getElementById('pointLat').value = lat;
-        document.getElementById('pointLon').value = lon;
-        document.getElementById('addSidebar').style.display = 'block';
-
-        addMode = false; // reset add mode
-        });
-    }
-
-
-
-
-
-    //funzione per caricare punti in base alla categoria
-    async function loadPoint(param){
-        const url = `../../api/pointsofinterestsapi/points?category=${param}`;
-        const response = await fetch(url);
-        const pois = await response.json();
-
-        const features = pois.map(poi => {
-            const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude])); //fromLonLat esegue la conversione da 4326 a 3857
-            const feature = new ol.Feature({ geometry, name: poi.name, id: poi.id, latitude: poi.latitude, longitude: poi.longitude, categories: poi.categories });
-            return feature;
-        });
-
+    // -- Helper per GeoJSON --------------------------------------------------
+    async function fetchAndRender(url, styleFn = defaultStyle) {
+        const res = await fetch(url);
+        const fc = await res.json();
+        const format = new ol.format.GeoJSON();
+        const features = format.readFeatures(fc, { featureProjection: 'EPSG:3857' });
         vectorSource.clear();
+        features.forEach(f => f.setStyle(styleFn(f)));
+        vectorSource.addFeatures(features);
+    }
+    async function fetchAndAdd(url, styleFn = defaultStyle) {
+        const res = await fetch(url);
+        const fc = await res.json();
+        const format = new ol.format.GeoJSON();
+        const features = format.readFeatures(fc, { featureProjection: 'EPSG:3857' });
+        features.forEach(f => f.setStyle(styleFn(f)));
         vectorSource.addFeatures(features);
     }
 
+    // -- Utility per estensione della mappa ----------------------------------
+    function getMapBBox() {
+        const ext = map.getView().calculateExtent(map.getSize());
+        const bl = ol.proj.toLonLat([ext[0], ext[1]]);
+        const tr = ol.proj.toLonLat([ext[2], ext[3]]);
+        return { minLon: bl[0], minLat: bl[1], maxLon: tr[0], maxLat: tr[1] };
+    }
 
-    //funzione per eliminare un punto selezionato
+    // -- Pulsanti principali --------------------------------------------------
+    function clearAllVectorSources() {
+        map.getLayers().forEach(layer => {
+            const src = layer.getSource?.();
+            if (src instanceof ol.source.Vector) src.clear();
+        });
+    }
+    function loadAllPoints() {
+        const bbox = getMapBBox();
+        const url = `/api/pointsofinterestsapi?minLon=${bbox.minLon}&minLat=${bbox.minLat}&maxLon=${bbox.maxLon}&maxLat=${bbox.maxLat}`;
+        fetchAndRender(url);
+    }
+    // categorie
+    function openCategorySelector() { document.getElementById("categoryMenu").style.display = "block"; }
+    function closeCategorySelector() { document.getElementById("categoryMenu").style.display = "none"; }
+    async function loadSelectedCategories() {
+        clearAllVectorSources();
+        const checks = document.querySelectorAll('#categoryMenu input[type="checkbox"]:checked');
+        const cats = Array.from(checks).map(cb => cb.value);
+        for (let cat of cats) {
+            const url = `/api/pointsofinterestsapi/points?category=${cat}`;
+            fetchAndAdd(url, f => {
+                const color = getColorForCategory(cat);
+                return new ol.style.Style({
+                    image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color }) })
+                });
+            });
+        }
+        closeCategorySelector();
+    }
+    function getColorForCategory(cat) {
+        const mapping = {
+            Generic:'#808080', DrinkingWater:'#1E90FF', Shelter:'#A0522D', Toilet:'#8B0000',
+            Restaurant:'#FF4500', Bar:'#FF69B4', Viewpoint:'#FFD700', CampSite:'#228B22',
+            Bench:'#A9A9A9', Info:'#00CED1', Parking:'#2F4F4F', PicnicSite:'#32CD32',
+            Fireplace:'#B22222', Ruin:'#708090', Summit:'#8A2BE2', Waterfall:'#00BFFF',
+            Bridge:'#A52A2A', Gate:'#6B8E23', Cross:'#DAA520', Cave:'#696969',
+            Danger:'#DC143C', Signpost:'#4169E1'
+        };
+        return mapping[cat] || '#000000';
+    }
+
+    // -- Info popup e cancellazione ------------------------------------------
+    map.on('singleclick', evt => {
+        map.forEachFeatureAtPixel(evt.pixel, (feat) => {
+            const props = feat.getProperties();
+            // prendi le coordinate dalla geometry e trasformale in lon/lat
+            const coord3857 = feat.getGeometry().getCoordinates();
+            const [lon, lat] = ol.proj.toLonLat(coord3857);
+
+            document.getElementById('infoName').textContent    = props.name || '';
+            document.getElementById('infoLat').textContent     = lat.toFixed(6);
+            document.getElementById('infoLon').textContent     = lon.toFixed(6);
+            document.getElementById('infoCat').textContent     = (props.categories || []).join(', ');
+            document.getElementById('infoPointId').value       = props.id;
+            document.getElementById('infoDescription').textContent = props.description || '';
+            document.getElementById('infoSidebar').style.display = 'block';
+        });
+    });
+
+
+    map.on('click', evt => {
+        const feature = map.forEachFeatureAtPixel(evt.pixel, (f, l) => l === vectorLayer ? f : null);
+        if (!feature) closeSidebar();
+    });
+    function closeSidebar() { document.getElementById('infoSidebar').style.display = 'none'; }
+
     async function deletePoint() {
         const id = document.getElementById('infoPointId').value;
-        if (!id) return;
-
-        const confirmed = confirm("Are you sure you want to delete this point?");
-        if (!confirmed) return;
-
-        const response = await fetch(`/api/pointsofinterestsapi/points/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (response.ok) {
-            alert("Point deleted.");
-            document.getElementById('infoSidebar').style.display = 'none';
-            // Optional: remove point from map
-            const feature = vectorLayer.getSource().getFeatures().find(f => f.get('id') == id);
-            if (feature) vectorLayer.getSource().removeFeature(feature);
+        if (!id || !confirm("Sei sicuro di voler eliminare questo punto?")) return;
+        const res = await fetch(`/api/pointsofinterestsapi/points/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+             alert("Punto eliminato");
+             closeSidebar();
+             const feat = vectorSource.getFeatures().find(f => f.get('id') == id);
+             if (feat) vectorSource.removeFeature(feat);
         } else {
-            alert("Failed to delete point.");
+            alert("Eliminazione fallita");
         }
     }
 
-
-    //Funzione per aggiungere un punto tramite il form
-    async function submitNewPoint(event) {
-        event.preventDefault();
-
-        const name = document.getElementById('pointName').value;
-        const description = document.getElementById('pointDescription').value;
-        const lat = parseFloat(document.getElementById('pointLat').value);
-        const lon = parseFloat(document.getElementById('pointLon').value);
-
-        const select = document.getElementById('pointCategories');
-        const selected = Array.from(select.selectedOptions).map(option => option.value);
-
-        if (selected.length === 0) {
-            alert("Please select at least one category.");
-            return;
-        }
-
-        const data = {
-            name,
-            description,
-            latitude: lat,
-            longitude: lon,
-            categories: selected // <-- important
-        };
-
-        console.log(data)
-
-        const response = await fetch('../../api/pointsofinterestsapi/post', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-
-        if (response.ok) {
-            alert("Point added successfully!");
-            document.getElementById('addSidebar').style.display = 'none';
-            document.getElementById('addPointForm').reset();
-            // Optionally add the new point to the map
-        } else {
-            alert("Failed to add point.");
-        }
+    // -- Aggiunta nuovo punto ------------------------------------------------
+    let addMode = false;
+    function addPoint() {
+        addMode = true;
+        alert("Click map to place new POI");
     }
-
-    //Funzione di supporto. Disabilita la addMode e nasconde la sidebar per l'aggiunta
+    map.on('click', evt => {
+        if (!addMode) return;
+        const coord = ol.proj.toLonLat(evt.coordinate);
+        document.getElementById('pointLon').value = coord[0];
+        document.getElementById('pointLat').value = coord[1];
+        document.getElementById('addSidebar').style.display = 'block';
+        addMode = false;
+    });
     function cancelAdd() {
         document.getElementById('addSidebar').style.display = 'none';
         addMode = false;
     }
+    async function submitNewPoint(e) {
+        e.preventDefault();
+        const name = e.target.pointName.value;
+        const desc = e.target.pointDescription.value;
+        const lat = parseFloat(e.target.pointLat.value);
+        const lon = parseFloat(e.target.pointLon.value);
+        const cats = Array.from(e.target.pointCategories.selectedOptions).map(o=>o.value);
+        const body = { name, description: desc, latitude: lat, longitude: lon, categories: cats };
+        const res = await fetch('/api/pointsofinterestsapi/post',{
+            method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+        });
+        if(res.ok){
+            alert("Added"); cancelAdd(); loadAllPoints();
+        } else alert("Add failed");
+    }
 
+    // -- Edit esistente ------------------------------------------------------
     function enablePointEditMode() {
-    //const pointFeatures = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
-    const pointFeatures = getAllPointFeaturesFromMap(map);
-    const modify = new ol.interaction.Modify({ features: new ol.Collection(pointFeatures) });
-    map.addInteraction(modify);
-
-    modify.on('modifyend', async e => {
-        for (const f of e.features.getArray()) {
-            const coords = ol.proj.toLonLat(f.getGeometry().getCoordinates());
-            const id = f.get('id');
-
-            await fetch(`/api/pointsofinterestsapi/points/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ latitude: coords[1], longitude: coords[0] })
-            });
-        }
-        alert("Punti aggiornati");
-        map.removeInteraction(modify);
-        });
-    }
-
-    //funzione di supporti che restituisce tutti i punti presenti dalle feature
-    function getAllPointFeaturesFromMap(map) {
-        const pointFeatures = [];
-
-        map.getLayers().forEach(layer => {
-            const source = layer.getSource?.();
-            if (source instanceof ol.source.Vector) {
-                const points = source.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
-                pointFeatures.push(...points);
-            }
-        });
-
-        return pointFeatures;
-    }
-
-
-    let drawFilterInteraction = null;
-
-    function enableSpatialFilter() {
-        //se la mappa è in add mode il filtro spaziale deve essere disabilitato
-        if(addMode){
-            alert("You can't filter while adding a point!");
-            return;
-        }
-        if (drawFilterInteraction) {
-            map.removeInteraction(drawFilterInteraction);
-        }
-        drawFilterInteraction = new ol.interaction.Draw({
-            source: new ol.source.Vector(),
-            type: 'Polygon'
-        });
-
-        map.addInteraction(drawFilterInteraction);
-
-        drawFilterInteraction.on('drawend', async (event) => {
-            const feature = event.feature;
-            const geom = feature.getGeometry();
-            const coords = geom.getCoordinates()[0].map(c => ol.proj.toLonLat(c));
-
-            const geometryGeoJSON = {
-                type: 'Polygon',
-                coordinates: [coords]
-            };
-
-            const response = await fetch('/api/pointsofinterestsapi/spatialfilter', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ geometry: geometryGeoJSON })
-            });
-
-            const pois = await response.json();
-
-            const features = pois.map(poi => {
-                const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-                return new ol.Feature({
-                    geometry,
-                    name: poi.name,
-                    id: poi.id,
-                    latitude: poi.latitude,
-                    longitude: poi.longitude,
-                    categories: poi.categories
+        const feats = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
+        const modify = new ol.interaction.Modify({ features: new ol.Collection(feats) });
+        map.addInteraction(modify);
+        modify.on('modifyend', async evt => {
+            for (let f of evt.features.getArray()) {
+                const c = ol.proj.toLonLat(f.getGeometry().getCoordinates());
+                const id = f.get('id');
+                await fetch(`/api/pointsofinterestsapi/points/${id}`,{
+                    method:'PUT',headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ latitude:c[1], longitude:c[0] })
                 });
-            });
-
-            vectorSource.clear();
-            vectorSource.addFeatures(features);
-
-            map.removeInteraction(drawFilterInteraction);
-            drawFilterInteraction = null;
+            }
+            alert("Updated"); map.removeInteraction(modify);
         });
-
-        alert("Disegna un poligono per filtrare i POI");
     }
 
-
-      // Radius Search
-        async function radiusSearchMode(){
-          alert('Click map for buffer center');
-          map.once('click',async function(evt){
-            circleSource.clear();
-            const center=ol.proj.toLonLat(evt.coordinate);
-            const [longitude, latitude] = center;
-            const r=parseFloat(prompt('Radius meters:','500'));
-            if(isNaN(r)){ 
-                alert('Invalid'); 
-                return; 
-            }
-            circleSource.addFeature(new ol.Feature(new ol.geom.Circle(evt.coordinate,r)));
-            const pois = await getNearbyPoints(longitude,latitude,r);
-            console.log(pois)
-            const features = pois.map(poi => {
-                const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-                const feature = new ol.Feature({ geometry, name: poi.name, id: poi.id, latitude: poi.latitude, longitude: poi.longitude, categories: poi.categories });
-                feature.setStyle(highlightStyle());
-                return feature;
+    // -- Filtro spaziale ----------------------------------------------------
+    let drawFilter = null;
+    function enableSpatialFilter() {
+        if (addMode) { alert("Finish adding first"); return; }
+        if (drawFilter) map.removeInteraction(drawFilter);
+        drawFilter = new ol.interaction.Draw({ source: circleSource, type: 'Polygon' });
+        map.addInteraction(drawFilter);
+        drawFilter.on('drawend', async ev => {
+            const coords = ev.feature.getGeometry().getCoordinates()[0]
+                            .map(c=>ol.proj.toLonLat(c));
+            const geojson = { type:'Polygon', coordinates:[coords] };
+            const res = await fetch('/api/pointsofinterestsapi/spatialfilter',{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ geometry: geojson })
             });
-            vectorSource.addFeatures(features);
-            alert(`Found ${features.length} points`);
-          });
-        }
-
-        //function to retrieve nearby points
-        async function getNearbyPoints(longitude, latitude, radius) {
-            const url = `/api/pointsofinterestsapi/nearby?longitude=${longitude}&latitude=${latitude}&radiusMeters=${radius}`;
-            try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Error ${response.status}`);
-            const data = await response.json();
-            console.log("Nearby points:", data);
-            return data;
-            } catch (error) {
-            console.error("Failed to fetch nearby points:", error);
-            }
-    }
-
-
-
-        // Nearest neighbors
-        function nearestSearchMode(){
-          const n=parseInt(prompt('N nearest POI:','5'));
-          if(isNaN(n)||n<1){ 
-              alert('Invalid'); 
-              return; 
-          }
-          alert('Click map for reference');
-          map.once('singleclick', async function(evt) {
-            const [lon, lat] = ol.proj.toLonLat(evt.coordinate); 
-
-            const nearestPoints = await getNearestPoints(lon, lat, n);
-
+            const fc = await res.json();
+            const format = new ol.format.GeoJSON();
+            const feats = format.readFeatures(fc, { featureProjection:'EPSG:3857' });
             vectorSource.clear();
-
-            const features = nearestPoints.map(poi => {
-            const geometry = new ol.geom.Point(ol.proj.fromLonLat([poi.longitude, poi.latitude]));
-            const feature = new ol.Feature({ geometry, name: poi.name, id: poi.id, latitude: poi.latitude, longitude: poi.longitude, categories: poi.categories });
-            feature.setStyle(highlightStyle());
-            return feature;
-            });
-
-            vectorSource.addFeatures(features);
-            });
-        }
-
-        //Nearest N points
-        async function getNearestPoints(longitude, latitude, count) {
-          const url = `../../api/pointsofinterestsapi/nearest?longitude=${longitude}&latitude=${latitude}&count=${count}`;
-
-          try {
-            const response = await fetch(url);
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const points = await response.json();
-            return points; // Array di punti
-          } catch (error) {
-            console.error('Errore nel recupero dei punti:', error);
-            return [];
-          }
+            feats.forEach(f=>f.setStyle(defaultStyle()));
+            vectorSource.addFeatures(feats);
+            map.removeInteraction(drawFilter); drawFilter = null;
+        });
+        alert("Draw polygon to filter");
     }
 
+    // -- Cerca per raggio ---------------------------------------------------
+    async function radiusSearchMode() {
+        alert('Click center for radius');
+        map.once('click', async ev => {
+            circleSource.clear(); vectorSource.clear();
+            const centerPx = ev.coordinate;
+            const [lon,lat] = ol.proj.toLonLat(ev.coordinate);
+            const r = parseFloat(prompt('Radius (m):','500'));
+            if (isNaN(r)) return alert('Invalid');
+            circleSource.addFeature(new ol.Feature(new ol.geom.Circle(centerPx, r)));
+            const res = await fetch(`/api/pointsofinterestsapi/nearby?longitude=${lon}&latitude=${lat}&radiusMeters=${r}`);
+            const fc = await res.json();
+            const format = new ol.format.GeoJSON();
+            const feats = format.readFeatures(fc, { featureProjection:'EPSG:3857' });
+            feats.forEach(f=>f.setStyle(highlightStyle()));
+            vectorSource.addFeatures(feats);
+            alert(`Found ${feats.length}`);
+        });
+    }
 
+    // -- Nearest N -----------------------------------------------------------
+    async function nearestSearchMode() {
+        const n = parseInt(prompt('How many nearest?','5'));
+        if (isNaN(n)||n<1) return alert('Invalid');
+        alert('Click reference point');
+        map.once('singleclick', async ev => {
+            const [lon,lat] = ol.proj.toLonLat(ev.coordinate);
+            const res = await fetch(`/api/pointsofinterestsapi/nearest?longitude=${lon}&latitude=${lat}&count=${n}`);
+            const fc = await res.json();
+            const format = new ol.format.GeoJSON();
+            const feats = format.readFeatures(fc, { featureProjection:'EPSG:3857' });
+            vectorSource.clear();
+            feats.forEach(f=>f.setStyle(highlightStyle()));
+            vectorSource.addFeatures(feats);
+        });
+    }
 </script>
+
 

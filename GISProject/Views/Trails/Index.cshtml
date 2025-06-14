@@ -105,10 +105,12 @@
         <details>
             <summary>Operazioni</summary>
             <button onclick="enableDrawing()">Disegna Trail</button>
-            <button onclick="enableEditMode()">Modifica Trail</button>
             <button id="cancelButton" onclick="cancelDrawing()">Annulla Disegno</button>
+            <button onclick="enableEditMode()">Modifica Trail</button>
             <button onclick="enableTrailSpatialFilter()">Filtro Spaziale</button>
-            <button onclick="loadOnlyPolygonTrails()">Solo Poligoni</button>
+            <button onclick="loadOnlyPolygonTrails()">Solo percorsi chiusi (Poligoni)</button>
+            <button onclick="loadIntersectingTrails()">Solo interesezioni tra trail</button>
+
         </details>
         <details>
             <summary>Filtri Difficoltà</summary>
@@ -120,7 +122,7 @@
     </div>
 
     <div class="filters-panel">
-        <details open>
+        <details>
             <summary>Filtri Avanzati</summary>
 
             <input id="minArea" placeholder="Area ≥ (m²)" type="number" />
@@ -627,6 +629,13 @@
           if (evt.key === 'Enter' && modifyInteraction) finalizeEdit();
           if (evt.key === 'Escape' && modifyInteraction) cancelEditing();
         });
+
+        async function loadIntersectingTrails() {
+          // chiude eventuali altri filtri attivi
+          activeTrailFilter = 'Intersections';
+          // richiesta al nuovo endpoint
+          await fetchAndRender('/api/trailsapi/intersections');
+        }
     </script>
 
 </body>

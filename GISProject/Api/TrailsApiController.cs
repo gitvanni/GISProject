@@ -7,7 +7,6 @@ using GISProject.Data;
 using GISProject.Models;
 using GISProject.Enumerations;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace GISProject.Api
 {
@@ -489,6 +488,44 @@ namespace GISProject.Api
                 type = "FeatureCollection",
                 features
             });
+        }
+
+        [HttpGet("intersections")]
+        public async Task<IActionResult> GetIntersectingTrails()
+        {
+            var multiLines = _context.Trails
+                .Where(t => t.TrailType == TrailType.MultiLine);
+   
+            var intersections = _context.Trails
+                .Where(t => t.Geometry != null
+                         && _context.Trails
+                                    .Where(o => o.Id != t.Id && o.Geometry != null)
+                                    .Any(o => o.Geometry.Intersects(t.Geometry)));
+
+            var query = multiLines
+                .Union(intersections)
+                .AsNoTracking();
+
+            var list = await query.ToListAsync();
+
+            var featureCollection = new
+            {
+                type = "FeatureCollection",
+                features = list.Select(t => new
+                {
+                    type = "Feature",
+                    geometry = t.Geometry,    
+                    properties = new
+                    {
+                        id = t.Id,
+                        name = t.Name,
+                        difficulty = t.Difficulty,
+                        trailType = t.TrailType
+                    }
+                })
+            };
+
+            return Ok(featureCollection);
         }
     }
 }

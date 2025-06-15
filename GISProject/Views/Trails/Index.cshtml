@@ -111,6 +111,16 @@
             <button onclick="loadOnlyPolygonTrails()">Solo percorsi chiusi (Poligoni)</button>
             <button onclick="loadIntersectingTrails()">Solo interesezioni tra trail</button>
 
+            <div id="legend">
+                <strong>Legenda:</strong>
+                <ul>
+                    <li>🖱️ Sinistro: aggiungi punto</li>
+                    <li>🖱️ Destro (1° click): chiudi segmento</li>
+                    <li>🖱️ Destro (2° click): salva trail</li>
+                    <li>⎋ ESC: annulla</li>
+                </ul>
+            </div>
+
         </details>
         <details>
             <summary>Filtri Difficoltà</summary>
@@ -134,19 +144,15 @@
             <input id="nearestCount" placeholder="N vicini" type="number" />
             <button onclick="enableNearestMode()">Seleziona Trail per Vicini</button>
 
+
             <input id="attrField" placeholder="Campo (es. name)" type="text" />
             <input id="attrValue" placeholder="Valore" type="text" />
             <button onclick="loadTrailsByAttribute()">Filtra Attributo</button>
 
-            <div id="legend">
-                <strong>Legenda:</strong>
-                <ul>
-                    <li>🖱️ Sinistro: aggiungi punto</li>
-                    <li>🖱️ Destro (1° click): chiudi segmento</li>
-                    <li>🖱️ Destro (2° click): salva trail</li>
-                    <li>⎋ ESC: annulla</li>
-                </ul>
-            </div>
+            <button onclick="loadMultiIntersect()">MultiLine + Intersect</button>
+            <button onclick="loadPolyContained()">Polygon + Contenute</button>
+
+
         </details>
     </div>
 
@@ -161,7 +167,6 @@
     </div>
 
     <script>
-
         let activeTrailFilter = null;
 
         function closeSidebar() {
@@ -188,6 +193,9 @@
           }
         });
 
+        // flag di stato
+        let nearestMode = false;
+
         // mappa
         const map = new ol.Map({
           target: 'map',
@@ -200,6 +208,20 @@
             zoom: 6
           })
         });
+
+         const nearestLayer = new ol.layer.Vector({
+          source: new ol.source.Vector(),
+          style: feature => {
+              const geomType = feature.getGeometry().getType();
+              const stroke = new ol.style.Stroke({ color: 'red', width: 4 });
+              const fill   = geomType === 'Polygon'
+                ? new ol.style.Fill({ color: 'rgba(255,0,0,0.2)' })
+                : null;
+              return new ol.style.Style({ stroke, fill });
+            },
+          zIndex: 1000
+        });
+        map.addLayer(nearestLayer);
 
         // GeoJSON reader (legge FeatureCollection → ol.Feature[])
         const geojsonFormat = new ol.format.GeoJSON({
@@ -354,39 +376,24 @@
           await fetchAndRender(url);
         }
 
-        // --- TROVA N VICINI ---
-        function enableNearestMode() {
-          const n = parseInt(document.getElementById('nearestCount').value);
-          if (isNaN(n) || n < 1) return alert('N non valido');
-
-          document.getElementById('drawNotification').textContent = '📍 Clicca su un trail';
-          document.getElementById('drawNotification').style.display  = 'block';
-          map.getTargetElement().style.cursor = 'pointer';
-
-          map.once('singleclick', async evt => {
-            document.getElementById('drawNotification').style.display = 'none';
-            map.getTargetElement().style.cursor = '';
-
-            const feat = map.forEachFeatureAtPixel(evt.pixel, f=>f);
-            if (!feat) return alert('Seleziona una trail valida');
-
-            // centro del feature
-            const geom = feat.getGeometry();
-            const coord = geom.getType() === 'Polygon'
-              ? ol.extent.getCenter(geom.getExtent())
-              : geom.getCoordinateAt(0.5);
-            const [lon, lat] = ol.proj.toLonLat(coord);
-
-            const url = `/api/trailsapi/nearest?lon=${lon}&lat=${lat}&n=${n}`;
-            await fetchAndRender(url);
-          });
-        }
-
         // --- SELEZIONE & DELETE ---
         let selectedFeature = null;
 
         // click per selezione feature
         map.on('singleclick', evt => {
+          if (nearestMode) {
+              const f = map.forEachFeatureAtPixel(evt.pixel, feat => feat);
+              if (!f) {
+                alert('Nessun trail selezionato');
+                return;
+              }
+              const id = f.get('id');
+              const n  = parseInt(document.getElementById('nearestCount').value, 10);
+              loadNearestTrails(id, n);
+              nearestMode = false;  // esci dalla modalità
+              return;
+            }
+
           if (drawActive) return;
           const f = map.forEachFeatureAtPixel(evt.pixel, feat => feat);
           if (f) {
@@ -584,9 +591,11 @@
           if (!selectedFeature) return;
           const id         = document.getElementById('trailId').value;
           const name       = document.getElementById('trailName').textContent;
-          const difficulty = document.getElementById('trailDifficulty').textContent;
+          let difficulty = selectedFeature.get('difficulty');
           const geom       = selectedFeature.getGeometry();
           let geometry, trailType;
+
+          difficulty = normalizeDifficulty(difficulty);
 
           const type = geom.getType();
           if (type === 'LineString') {
@@ -621,7 +630,16 @@
             closeSidebar();
             alert("Modifiche salvate.");
           } else {
-            alert("Errore durante il salvataggio delle modifiche.");
+            // prova a leggere il JSON di errore (o fallback a text)
+            let errMsg;
+            try {
+              const errJson = await res.json();
+              errMsg = errJson.message || JSON.stringify(errJson);
+            } catch {
+              errMsg = await res.text();
+            }
+            console.error("API PUT error:", errMsg);
+            alert(`Errore durante il salvataggio: ${errMsg}`);
           }
         }
 
@@ -630,14 +648,122 @@
           if (evt.key === 'Escape' && modifyInteraction) cancelEditing();
         });
 
-        async function loadIntersectingTrails() {
-          // chiude eventuali altri filtri attivi
-          activeTrailFilter = 'Intersections';
-          // richiesta al nuovo endpoint
-          await fetchAndRender('/api/trailsapi/intersections');
+        function normalizeDifficulty(raw) {
+          const strMap = {
+            unknown: 'Unknown',
+            easy:    'Easy',
+            moderate:'Moderate',
+            hard:    'Hard'
+          };
+          const numMap = {
+            0: 0, // Unknown
+            1: 1, // Easy
+            2: 2, // Moderate
+            3: 3  // Hard
+          };
+
+          // se è già un numero valido
+          if (typeof raw === 'number' && raw in numMap) {
+            return raw;
+          }
+
+          if (typeof raw === 'string') {
+            const s = raw.trim().toLowerCase();
+
+            // mappa stringhe “unknown”/“easy”/“moderate”/“hard”
+            if (s in strMap) {
+              return strMap[s];
+            }
+
+            // mappa stringhe numeriche “0”/“1”/“2”/“3”
+            const n = parseInt(s, 10);
+            if (!isNaN(n) && n in numMap) {
+              return n;
+            }
+          }
+
+          console.warn(`normalizeDifficulty: valore non riconosciuto (“${raw}”), uso fallback “Unknow”`);
+          return 'Unknow';
+        }
+
+        //Modalità Vicini
+        function enableNearestMode() {
+          const n = parseInt(document.getElementById('nearestCount').value);
+          if (isNaN(n) || n <= 0) {
+            return alert('Inserisci un numero valido di vicini');
+          }
+          nearestMode = true;
+          alert(`Modalità vicini attivata: clicca su un trail per vederne ${n} più vicini`);
+        }
+
+        // 3) Funzione di caricamento dei vicini
+        async function loadNearestTrails(id, count) {
+          try {
+            const res = await fetch(`/api/trailsapi/nearest?id=${id}&count=${count}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const geojson = await res.json();
+
+            // 3.a) Pulisco e disegno sul layer dedicato
+            nearestLayer.getSource().clear();
+            const features = geojsonFormat.readFeatures(geojson);
+            nearestLayer.getSource().addFeatures(features);
+
+            // 3.b) (opzionale) zoom su area dei vicini
+            const extent = nearestLayer.getSource().getExtent();
+            map.getView().fit(extent, { padding: [50,50,50,50], maxZoom: 16 });
+          } catch (err) {
+            alert('Errore caricamento vicini: ' + err.message);
+          }
+        }
+
+        //Carica MultiLine + intersezioni
+        async function loadMultiIntersect() {
+          activeTrailFilter = 'MultiIntersect';
+          const extent = map.getView().calculateExtent(map.getSize());
+          const [bl, tr] = [
+            ol.proj.toLonLat(ol.extent.getBottomLeft(extent)),
+            ol.proj.toLonLat(ol.extent.getTopRight(extent))
+          ];
+          const url = `/api/trailsapi/multiline-intersect`
+                    + `?minLon=${bl[0]}&minLat=${bl[1]}`
+                    + `&maxLon=${tr[0]}&maxLat=${tr[1]}`;
+
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(res.status);
+            const geojson = await res.json();
+            vectorSource.clear();
+            const feats = geojsonFormat.readFeatures(geojson);
+            vectorSource.addFeatures(feats);
+          } catch (e) {
+            alert('Errore filtro MultiIntersect: ' + e);
+          }
+        }
+
+        //Carica Polygons + trail contenute
+        async function loadPolyContained() {
+          activeTrailFilter = 'PolyContained';
+          const extent = map.getView().calculateExtent(map.getSize());
+          const [bl, tr] = [
+            ol.proj.toLonLat(ol.extent.getBottomLeft(extent)),
+            ol.proj.toLonLat(ol.extent.getTopRight(extent))
+          ];
+          const url = `/api/trailsapi/polygons-contained`
+                    + `?minLon=${bl[0]}&minLat=${bl[1]}`
+                    + `&maxLon=${tr[0]}&maxLat=${tr[1]}`;
+
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(res.status);
+            const geojson = await res.json();
+            vectorSource.clear();
+            const feats = geojsonFormat.readFeatures(geojson);
+            vectorSource.addFeatures(feats);
+          } catch (e) {
+            alert('Errore filtro PolyContained: ' + e);
+          }
         }
     </script>
-
 </body>
 </html>
 

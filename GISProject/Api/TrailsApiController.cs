@@ -33,7 +33,7 @@ namespace GISProject.Api
 
             var trails = _context.Trails
                 .Where(t => t.Geometry != null && t.Geometry.Intersects(box))
-                .Take(500)
+                .Take(5000)
                 .AsEnumerable()
                 .ToList();
 
@@ -57,6 +57,38 @@ namespace GISProject.Api
             };
 
             return Ok(featureCollection);
+        }
+
+        //Returns all the trails
+        [HttpGet("all")]
+        public IActionResult GetAll([FromQuery] bool excludeUnknown = false)
+        {
+            var query = _context.Trails.AsQueryable();
+            if (excludeUnknown)
+                query = query.Where(t => t.Difficulty != DifficultyLevel.Unknown);
+
+            var trails = query
+                .Where(t => t.Geometry != null)
+                .AsEnumerable()
+                .ToList();
+
+            var features = trails.Select(t => new {
+                type = "Feature",
+                geometry = t.Geometry,
+                properties = new
+                {
+                    id = t.Id,
+                    name = t.Name,
+                    difficulty = t.Difficulty,
+                    trailType = t.TrailType
+                }
+            });
+
+            return Ok(new
+            {
+                type = "FeatureCollection",
+                features
+            });
         }
 
         //Create a trail
@@ -448,28 +480,28 @@ namespace GISProject.Api
             });
         }
 
-        //Find n nearest trails
+        //Returns n nearest trails
         [HttpGet("nearest")]
-        public IActionResult GetNearest([FromQuery] double lon,
-                                        [FromQuery] double lat,
-                                        [FromQuery] int n = 5)
+        public IActionResult GetNearest([FromQuery] long id, [FromQuery] int count = 5)
         {
-            var pt = _factory.CreatePoint(new Coordinate(lon, lat));
+            // 1) Trovo il trail selezionato
+            var selected = _context.Trails.Find(id);
+            if (selected == null)
+                return NotFound(new { message = "Trail non trovato." });
 
-            var nearest = _context.Trails
-                .Where(t => t.Geometry != null)
-                .AsEnumerable()
-                .Select(t => new
-                {
-                    Trail = t,
-                    Distance = t.Geometry.Distance(pt)
-                })
-                .OrderBy(x => x.Distance)
-                .Take(n)
-                .Select(x => x.Trail)
+            // 2) Assicuro l’SRID
+            selected.Geometry.SRID = 4326;
+
+            // 3) Calcolo le distanze e prendo i 'count' più vicini (escludo l’se stesso)
+            var nearestTrails = _context.Trails
+                .Where(t => t.Geometry != null && t.Id != id)
+                .OrderBy(t => t.Geometry.Distance(selected.Geometry))
+                .Take(count)
+                .AsEnumerable()  // forza l’esecuzione in memoria se EF non supporta direttamente Distance()
                 .ToList();
 
-            var features = nearest.Select(t => new
+            // 4) Costruisco la FeatureCollection GeoJSON
+            var features = nearestTrails.Select(t => new
             {
                 type = "Feature",
                 geometry = t.Geometry,
@@ -478,8 +510,7 @@ namespace GISProject.Api
                     id = t.Id,
                     name = t.Name,
                     difficulty = t.Difficulty,
-                    trailType = t.TrailType,
-                    distance = Math.Round(t.Geometry.Distance(pt), 6)
+                    trailType = t.TrailType
                 }
             });
 
@@ -490,42 +521,105 @@ namespace GISProject.Api
             });
         }
 
-        [HttpGet("intersections")]
-        public async Task<IActionResult> GetIntersectingTrails()
+        // GET api/trailsapi/multiline-intersect?minLon=&minLat=&maxLon=&maxLat=
+        [HttpGet("multiline-intersect")]
+        public IActionResult GetMultiLineAndIntersect(
+            [FromQuery] double minLon, [FromQuery] double minLat,
+            [FromQuery] double maxLon, [FromQuery] double maxLat)
         {
-            var multiLines = _context.Trails
-                .Where(t => t.TrailType == TrailType.MultiLine);
-   
-            var intersections = _context.Trails
-                .Where(t => t.Geometry != null
-                         && _context.Trails
-                                    .Where(o => o.Id != t.Id && o.Geometry != null)
-                                    .Any(o => o.Geometry.Intersects(t.Geometry)));
+            // 1) Limito in BBOX
+            var env = new Envelope(minLon, maxLon, minLat, maxLat);
+            var box = _factory.ToGeometry(env);
 
-            var query = multiLines
-                .Union(intersections)
-                .AsNoTracking();
+            // 2) Carico tutte le trail nell’estensione
+            var all = _context.Trails
+                .Where(t => t.Geometry != null && t.Geometry.Intersects(box))
+                .AsEnumerable()
+                .ToList();
 
-            var list = await query.ToListAsync();
+            // 3) Prendo tutte le MultiLine
+            var multilines = all.Where(t => t.TrailType == TrailType.MultiLine);
 
-            var featureCollection = new
+            // 4) Trovo tutte le coppie di trail che si intersecano
+            var inters = new HashSet<Trail>();
+            for (int i = 0; i < all.Count; i++)
             {
-                type = "FeatureCollection",
-                features = list.Select(t => new
+                for (int j = i + 1; j < all.Count; j++)
                 {
-                    type = "Feature",
-                    geometry = t.Geometry,    
-                    properties = new
+                    var t1 = all[i];
+                    var t2 = all[j];
+                    if (t1.Geometry.Intersects(t2.Geometry))
                     {
-                        id = t.Id,
-                        name = t.Name,
-                        difficulty = t.Difficulty,
-                        trailType = t.TrailType
+                        inters.Add(t1);
+                        inters.Add(t2);
                     }
-                })
-            };
+                }
+            }
 
-            return Ok(featureCollection);
+            // 5) Unisco MultiLine + intersezioni
+            var result = multilines.Concat(inters).Distinct();
+
+            // 6) Ritorno GeoJSON
+            var features = result.Select(t => new {
+                type = "Feature",
+                geometry = t.Geometry,
+                properties = new
+                {
+                    id = t.Id,
+                    name = t.Name,
+                    difficulty = t.Difficulty,
+                    trailType = t.TrailType
+                }
+            });
+
+            return Ok(new { type = "FeatureCollection", features });
         }
+
+
+        // GET api/trailsapi/polygons-contained?minLon=&minLat=&maxLon=&maxLat=
+        [HttpGet("polygons-contained")]
+        public IActionResult GetPolygonsAndContained(
+            [FromQuery] double minLon, [FromQuery] double minLat,
+            [FromQuery] double maxLon, [FromQuery] double maxLat)
+        {
+            var env = new Envelope(minLon, maxLon, minLat, maxLat);
+            var box = _factory.ToGeometry(env);
+
+            var all = _context.Trails
+                .Where(t => t.Geometry != null && t.Geometry.Intersects(box))
+                .AsEnumerable()
+                .ToList();
+
+            var polygons = all.Where(t => t.TrailType == TrailType.Polygon);
+
+            //Trovo le trail (non-poligoni) contenute in un poligono
+            var contained = new HashSet<Trail>();
+            foreach (var poly in polygons)
+            {
+                foreach (var t in all.Where(x => x.TrailType != TrailType.Polygon))
+                {
+                    if (poly.Geometry.Contains(t.Geometry))
+                    {
+                        contained.Add(t);
+                        contained.Add(poly);
+                    }
+                }
+            }
+
+            var features = contained.Select(t => new {
+                type = "Feature",
+                geometry = t.Geometry,
+                properties = new
+                {
+                    id = t.Id,
+                    name = t.Name,
+                    difficulty = t.Difficulty,
+                    trailType = t.TrailType
+                }
+            });
+
+            return Ok(new { type = "FeatureCollection", features });
+        }
+
     }
 }

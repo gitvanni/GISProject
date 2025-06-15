@@ -27,7 +27,7 @@ namespace GISProject.Api
             _factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
         }
 
-        // GET api/points?minLon=...&minLat=...&maxLon=...&maxLat=...
+        // GET api/pointsofinterest?minLon=...&minLat=...&maxLon=...&maxLat=...
         [HttpGet]
         public IActionResult GetInBox([FromQuery] double minLon, [FromQuery] double minLat,
                                       [FromQuery] double maxLon, [FromQuery] double maxLat)
@@ -64,8 +64,8 @@ namespace GISProject.Api
             return Ok(featureCollection);
         }
 
-        // GET api/points/points?category=...
-        [HttpGet("points")]
+        // GET api/pointsofinterest/bycategory?category=...
+        [HttpGet("bycategory")]
         public IActionResult GetByCategory([FromQuery] PoiCategory category)
         {
             var pois = _context.PointsOfInterest
@@ -93,8 +93,8 @@ namespace GISProject.Api
             });
         }
 
-        // POST api/points/post
-        [HttpPost("post")]
+        // POST api/pointsofinterestapi
+        [HttpPost]
         public async Task<IActionResult> Post([FromBody] JsonElement body)
         {
             try
@@ -145,8 +145,8 @@ namespace GISProject.Api
             }
         }
 
-        // PUT api/points/points/{id}
-        [HttpPut("points/{id}")]
+        // PUT api/pointsofinterestapi/{id}
+        [HttpPut("{id}")]
         public async Task<IActionResult> UpdatePoint(long id, [FromBody] JsonElement body)
         {
             var pointEntity = await _context.PointsOfInterest.FindAsync(id);
@@ -162,8 +162,8 @@ namespace GISProject.Api
             return NoContent();
         }
 
-        // DELETE api/points/points/{id}
-        [HttpDelete("points/{id}")]
+        // DELETE api/pointsofinterestapi/{id}
+        [HttpDelete("{id}")]
         public async Task<IActionResult> DeletePoint(long id)
         {
             var pointEntity = await _context.PointsOfInterest.FindAsync(id);
@@ -176,7 +176,7 @@ namespace GISProject.Api
             return NoContent();
         }
 
-        // POST api/points/spatialfilter
+        // POST api/pointsofinterestapi/spatialfilter
         [HttpPost("spatialfilter")]
         public IActionResult SpatialFilter([FromBody] JsonElement data)
         {

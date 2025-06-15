@@ -231,6 +231,7 @@
         const features = format.readFeatures(fc, { featureProjection: 'EPSG:3857' });
         features.forEach(f => f.setStyle(styleFn(f)));
         vectorSource.addFeatures(features);
+        return vectorSource.getFeatures().length
     }
 
     // -- Utility per estensione della mappa ----------------------------------
@@ -260,31 +261,34 @@
         clearAllVectorSources();
         const checks = document.querySelectorAll('#categoryMenu input[type="checkbox"]:checked');
         const cats = Array.from(checks).map(cb => cb.value);
+        let count = 0;
         for (let cat of cats) {
-            const url = `/api/pointsofinterestsapi/points?category=${cat}`;
-            fetchAndAdd(url, f => {
+            const url = `/api/pointsofinterestsapi/bycategory?category=${cat}`;
+            count = count + await fetchAndAdd(url, f => {
                 const color = getColorForCategory(cat);
                 return new ol.style.Style({
                     image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color }) })
                 });
             });
         }
+        if(count==0) alert('No points have been found for the selected categories!')
         closeCategorySelector();
     }
     function getColorForCategory(cat) {
         const mapping = {
-            Generic:'#808080', DrinkingWater:'#1E90FF', Shelter:'#A0522D', Toilet:'#8B0000',
-            Restaurant:'#FF4500', Bar:'#FF69B4', Viewpoint:'#FFD700', CampSite:'#228B22',
-            Bench:'#A9A9A9', Info:'#00CED1', Parking:'#2F4F4F', PicnicSite:'#32CD32',
-            Fireplace:'#B22222', Ruin:'#708090', Summit:'#8A2BE2', Waterfall:'#00BFFF',
-            Bridge:'#A52A2A', Gate:'#6B8E23', Cross:'#DAA520', Cave:'#696969',
-            Danger:'#DC143C', Signpost:'#4169E1'
+            0:'#808080', 1:'#1E90FF', 2:'#A0522D', 3:'#8B0000',
+            4:'#FF4500', 5:'#FF69B4', 6:'#FFD700', 7:'#228B22',
+            8:'#A9A9A9', 9:'#00CED1', 10:'#2F4F4F', 11:'#32CD32',
+            12:'#B22222', 13:'#708090', 14:'#8A2BE2', 15:'#00BFFF',
+            16:'#A52A2A', 17:'#6B8E23', 18:'#DAA520', 19:'#696969',
+            20:'#DC143C', 21:'#4169E1'
         };
         return mapping[cat] || '#000000';
     }
 
     // -- Info popup e cancellazione ------------------------------------------
     map.on('singleclick', evt => {
+        if(drawFilter) return;
         map.forEachFeatureAtPixel(evt.pixel, (feat) => {
             const props = feat.getProperties();
             // prendi le coordinate dalla geometry e trasformale in lon/lat
@@ -311,7 +315,7 @@
     async function deletePoint() {
         const id = document.getElementById('infoPointId').value;
         if (!id || !confirm("Sei sicuro di voler eliminare questo punto?")) return;
-        const res = await fetch(`/api/pointsofinterestsapi/points/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/pointsofinterestsapi/${id}`, { method: 'DELETE' });
         if (res.ok) {
              alert("Punto eliminato");
              closeSidebar();
@@ -348,16 +352,23 @@
         const lon = parseFloat(e.target.pointLon.value);
         const cats = Array.from(e.target.pointCategories.selectedOptions).map(o=>o.value);
         const body = { name, description: desc, latitude: lat, longitude: lon, categories: cats };
-        const res = await fetch('/api/pointsofinterestsapi/post',{
+        const res = await fetch('/api/pointsofinterestsapi',{
             method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
         });
         if(res.ok){
-            alert("Added"); cancelAdd(); loadAllPoints();
+             const geometry = new ol.geom.Point(ol.proj.fromLonLat([lon, lat]));
+             const feature = new ol.Feature({ geometry, name, id: 'new', latitude: lat, longitude: lon, categories: cats });
+             feature.setStyle(highlightStyle());
+             vectorSource.addFeature(feature);
+             alert("Added"); cancelAdd();
         } else alert("Add failed");
     }
 
     // -- Edit esistente ------------------------------------------------------
     function enablePointEditMode() {
+        if(addMode){alert('It is not possible do edit a point during when adding a new one!'); return;}
+        if(drawFilter){alert('It is not possible do edit a point during when drawing a polygon!'); return;}
+        alert('Drag and drop a point to edit its position!')
         const feats = vectorSource.getFeatures().filter(f => f.getGeometry() instanceof ol.geom.Point);
         const modify = new ol.interaction.Modify({ features: new ol.Collection(feats) });
         map.addInteraction(modify);
@@ -365,7 +376,7 @@
             for (let f of evt.features.getArray()) {
                 const c = ol.proj.toLonLat(f.getGeometry().getCoordinates());
                 const id = f.get('id');
-                await fetch(`/api/pointsofinterestsapi/points/${id}`,{
+                await fetch(`/api/pointsofinterestsapi/${id}`,{
                     method:'PUT',headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({ latitude:c[1], longitude:c[0] })
                 });

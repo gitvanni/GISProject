@@ -109,7 +109,6 @@
             <button onclick="enableEditMode()">Modifica Trail</button>
             <button onclick="enableTrailSpatialFilter()">Filtro Spaziale</button>
             <button onclick="loadOnlyPolygonTrails()">Solo percorsi chiusi (Poligoni)</button>
-            <button onclick="loadIntersectingTrails()">Solo interesezioni tra trail</button>
 
             <div id="legend">
                 <strong>Legenda:</strong>
@@ -149,9 +148,8 @@
             <input id="attrValue" placeholder="Valore" type="text" />
             <button onclick="loadTrailsByAttribute()">Filtra Attributo</button>
 
-            <button onclick="loadMultiIntersect()">MultiLine + Intersect</button>
-            <button onclick="loadPolyContained()">Polygon + Contenute</button>
-
+            <button onclick="loadMultiIntersect()">Intersezioni fra Trail</button>
+            <button onclick="loadPolyContained()">Trail contenute nei poligoni</button>
 
         </details>
     </div>

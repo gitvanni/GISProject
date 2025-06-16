@@ -1,4 +1,5 @@
-﻿using GISProject.Data;
+﻿using Dapper;
+using GISProject.Data;
 using GISProject.Enumerations;
 using GISProject.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -7,9 +8,11 @@ using NetTopologySuite;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using NetTopologySuite.IO.Converters;
+using Npgsql;
 using System;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading.Tasks;
 
 namespace GISProject.Api
@@ -285,6 +288,86 @@ namespace GISProject.Api
             return Ok(new { type = "FeatureCollection", features });
         }
 
+        [HttpGet("dijkstra")]
+        public async Task<IActionResult> GetDijkstraPath([FromQuery] double longitude, [FromQuery] double latitude, [FromQuery] long pointId)
+        {
+            try
+            {
+                // Trova il punto di partenza
+                var startPoint = _factory.CreatePoint(new Coordinate(longitude, latitude));
+
+                // Trova il POI di destinazione
+                var destinationPoi = await _context.PointsOfInterest
+                    .Include(p => p.PoiCategories)
+                    .Where(p => p.Id == pointId)
+                    .FirstOrDefaultAsync();
+
+                if (destinationPoi == null)
+                    return NotFound(new { message = "POI di destinazione non trovato." });
+
+                // Trova il punto di destinazione
+                var destinationPoint = destinationPoi.Geometry as Point;
+                if (destinationPoint == null)
+                    return NotFound(new { message = "POI di destinazione non ha una geometria valida." });
+
+                // Calcola il percorso più breve (algoritmo di Dijkstra)
+                var path = CalculateDijkstraPath(startPoint, destinationPoint);
+
+                // Se non esiste un percorso valido
+                if (path == null || path.Count == 0)
+                    return NotFound(new { message = "Percorso non trovato." });
+
+                return Ok(path);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        // Funzione che calcola il percorso usando l'algoritmo di Dijkstra
+        private List<DijkstraResult> CalculateDijkstraPath(Point startPoint, Point destinationPoint)
+        {
+            // Trova i vertici più vicini
+            var startVertexId = GetClosestVertex(startPoint);
+            var endVertexId = GetClosestVertex(destinationPoint);
+
+            // Query per calcolare il percorso con Dijkstra
+            var query = @"
+            SELECT * 
+            FROM pgr_dijkstra(
+                'SELECT id, source, target, cost, geom FROM road_network',
+                @startVertexId, @endVertexId, false
+            )";
+
+            var results = _context.Database.GetDbConnection()
+                 .Query<DijkstraResult>(query, new { startVertexId, endVertexId })
+                 .ToList();
+
+            return results;
+        }
+
+        // Funzione che converte il percorso in un GeoJSON
+        private object ConvertPathToGeoJson(List<Coordinate> path)
+        {
+            var features = path.Select(c => new
+            {
+                type = "Feature",
+                geometry = new
+                {
+                    type = "Point",
+                    coordinates = new double[] { c.X, c.Y }
+                },
+                properties = new { }
+            });
+
+            return new
+            {
+                type = "FeatureCollection",
+                features
+            };
+        }
+
         // Helper for approximate distance in degrees
         private static double GeometryDistance(double lon1, double lat1, double lon2, double lat2)
         {
@@ -292,5 +375,28 @@ namespace GISProject.Api
             var dLat = lat2 - lat1;
             return Math.Sqrt(dLon * dLon + dLat * dLat);
         }
+
+        private long GetClosestVertex(Point point)
+        {
+            var query = @"
+            SELECT id
+            FROM road_network_vertices_pgr
+            ORDER BY the_geom <-> ST_Transform(ST_SetSRID(ST_MakePoint(@longitude, @latitude), 4326), 3857)
+            LIMIT 1";
+
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = query;
+                command.Parameters.Add(new NpgsqlParameter("longitude", point.Coordinate.X));
+                command.Parameters.Add(new NpgsqlParameter("latitude", point.Coordinate.Y));
+
+                _context.Database.OpenConnection();
+                var result = command.ExecuteScalar();
+                _context.Database.CloseConnection();
+
+                return (long)result;
+            }
+        }
+
     }
 }

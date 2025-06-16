@@ -621,5 +621,11 @@ namespace GISProject.Api
             return Ok(new { type = "FeatureCollection", features });
         }
 
+        [HttpGet("Dijkstra")]
+        public IActionResult Dijkstra()
+        {
+            return Ok();
+        }
+
     }
 }

@@ -77,6 +77,7 @@
     <button onclick="radiusSearchMode()">🔘 Radius Search</button>
     <button onclick="nearestSearchMode()">📍 Nearest POI</button>
     <button onclick="clearAllVectorSources()">Clear All</button>
+    <button onclick="DijkstraShortestTrack()">Find Shortest path</button>
 </div>
 
 
@@ -196,6 +197,15 @@
             zoom: 6
         })
     });
+
+    const routeSource = new ol.source.Vector();
+    const routeLayer = new ol.layer.Vector({
+      source: routeSource,
+      style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: 'blue', width: 4 })
+      })
+    });
+    map.addLayer(routeLayer);
 
     // Stili
     function defaultStyle() {
@@ -447,6 +457,67 @@
             vectorSource.addFeatures(feats);
         });
     }
+
+   let DijkstraMode = false;
+
+    //- Find shortest path to a point from a clicked point
+    async function DijkstraShortestTrack(){
+      alert("Click punto di partenza");
+      map.once('singleclick', async evStart => {
+        const [lon, lat] = ol.proj.toLonLat(evStart.coordinate);
+        alert("Ora clicca il POI di arrivo");
+
+        map.once('singleclick', async evPoi => {
+          // prendi il feature del POI
+          const poiFeat = map.forEachFeatureAtPixel(evPoi.pixel, f => f);
+          if (!poiFeat) return alert("Devi cliccare un POI");
+          const pointId = poiFeat.get('id');
+
+          try {
+            // 3) fetch percorso
+            const res = await fetch(
+              `/api/pointsofinterestsapi/dijkstra?longitude=${lon}&latitude=${lat}&pointId=${pointId}`
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const fc = await res.json();
+
+            // 4) leggi GeoJSON e aggiungi al source
+            const format = new ol.format.GeoJSON();
+            const routeFeats = format.readFeatures(fc, {
+              featureProjection: 'EPSG:3857'
+            });
+
+            routeSource.clear();
+            routeSource.addFeatures(routeFeats);
+
+            // 5) crea un extent combinato da tutte le geometrie
+            const combined = ol.extent.createEmpty();
+            routeFeats.forEach(f => {
+              const geom = f.getGeometry();
+              if (geom) {
+                ol.extent.extend(combined, geom.getExtent());
+              }
+            });
+
+            // 6) se ci sono geometrie valide, fit; altrimenti avviso
+            if (!ol.extent.isEmpty(combined)) {
+              map.getView().fit(combined, {
+                padding: [50,50,50,50],
+                maxZoom: 16
+              });
+            } else {
+              alert("Percorso vuoto o non trovato.");
+            }
+
+          } catch(err) {
+            console.error(err);
+            alert("Errore nel calcolo del percorso");
+          }
+        });
+      });
+    }
+
+
 </script>
 
 

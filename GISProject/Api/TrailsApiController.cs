@@ -349,7 +349,7 @@ namespace GISProject.Api
             }
         }
 
-        //Generci filter for all trails
+        //Generic filter for all trails
         [HttpGet("filter")]
         public IActionResult Filter([FromQuery] string filterField,
                                     [FromQuery] string filterValue,
@@ -484,23 +484,19 @@ namespace GISProject.Api
         [HttpGet("nearest")]
         public IActionResult GetNearest([FromQuery] long id, [FromQuery] int count = 5)
         {
-            // 1) Trovo il trail selezionato
             var selected = _context.Trails.Find(id);
             if (selected == null)
                 return NotFound(new { message = "Trail non trovato." });
 
-            // 2) Assicuro l’SRID
             selected.Geometry.SRID = 4326;
 
-            // 3) Calcolo le distanze e prendo i 'count' più vicini (escludo l’se stesso)
             var nearestTrails = _context.Trails
                 .Where(t => t.Geometry != null && t.Id != id)
                 .OrderBy(t => t.Geometry.Distance(selected.Geometry))
                 .Take(count)
-                .AsEnumerable()  // forza l’esecuzione in memoria se EF non supporta direttamente Distance()
+                .AsEnumerable() 
                 .ToList();
 
-            // 4) Costruisco la FeatureCollection GeoJSON
             var features = nearestTrails.Select(t => new
             {
                 type = "Feature",
@@ -521,26 +517,22 @@ namespace GISProject.Api
             });
         }
 
-        // GET api/trailsapi/multiline-intersect?minLon=&minLat=&maxLon=&maxLat=
+        // Filter intersection of trails
         [HttpGet("multiline-intersect")]
         public IActionResult GetMultiLineAndIntersect(
             [FromQuery] double minLon, [FromQuery] double minLat,
             [FromQuery] double maxLon, [FromQuery] double maxLat)
         {
-            // 1) Limito in BBOX
             var env = new Envelope(minLon, maxLon, minLat, maxLat);
             var box = _factory.ToGeometry(env);
 
-            // 2) Carico tutte le trail nell’estensione
             var all = _context.Trails
                 .Where(t => t.Geometry != null && t.Geometry.Intersects(box))
                 .AsEnumerable()
                 .ToList();
 
-            // 3) Prendo tutte le MultiLine
             var multilines = all.Where(t => t.TrailType == TrailType.MultiLine);
 
-            // 4) Trovo tutte le coppie di trail che si intersecano
             var inters = new HashSet<Trail>();
             for (int i = 0; i < all.Count; i++)
             {
@@ -556,10 +548,8 @@ namespace GISProject.Api
                 }
             }
 
-            // 5) Unisco MultiLine + intersezioni
             var result = multilines.Concat(inters).Distinct();
 
-            // 6) Ritorno GeoJSON
             var features = result.Select(t => new {
                 type = "Feature",
                 geometry = t.Geometry,
@@ -576,7 +566,7 @@ namespace GISProject.Api
         }
 
 
-        // GET api/trailsapi/polygons-contained?minLon=&minLat=&maxLon=&maxLat=
+        // Filter trails inside polygons
         [HttpGet("polygons-contained")]
         public IActionResult GetPolygonsAndContained(
             [FromQuery] double minLon, [FromQuery] double minLat,
@@ -592,7 +582,6 @@ namespace GISProject.Api
 
             var polygons = all.Where(t => t.TrailType == TrailType.Polygon);
 
-            //Trovo le trail (non-poligoni) contenute in un poligono
             var contained = new HashSet<Trail>();
             foreach (var poly in polygons)
             {
@@ -620,12 +609,5 @@ namespace GISProject.Api
 
             return Ok(new { type = "FeatureCollection", features });
         }
-
-        [HttpGet("Dijkstra")]
-        public IActionResult Dijkstra()
-        {
-            return Ok();
-        }
-
     }
 }

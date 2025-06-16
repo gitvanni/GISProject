@@ -104,26 +104,26 @@
     <div class="controls-panel">
         <details>
             <summary>Operazioni</summary>
-            <button onclick="enableDrawing()">Disegna Trail</button>
-            <button id="cancelButton" onclick="cancelDrawing()">Annulla Disegno</button>
-            <button onclick="enableEditMode()">Modifica Trail</button>
-            <button onclick="enableTrailSpatialFilter()">Filtro Spaziale</button>
-            <button onclick="loadOnlyPolygonTrails()">Solo percorsi chiusi (Poligoni)</button>
+            <button onclick="enableDrawing()">Draw a trail</button>
+            <button id="cancelButton" onclick="cancelDrawing()">Undraw</button>
+            <button onclick="enableEditMode()">Modify Trail</button>
+            <button onclick="enableTrailSpatialFilter()">Spatial Filter</button>
+            <button onclick="loadOnlyPolygonTrails()">Only closed trails</button>
 
             <div id="legend">
                 <strong>Legenda:</strong>
                 <ul>
-                    <li>🖱️ Sinistro: aggiungi punto</li>
-                    <li>🖱️ Destro (1° click): chiudi segmento</li>
-                    <li>🖱️ Destro (2° click): salva trail</li>
-                    <li>⎋ ESC: annulla</li>
+                    <li>🖱️ sx: add point</li>
+                    <li>🖱️ dx (1° click): close segment</li>
+                    <li>🖱️ dx (2° click): save trail</li>
+                    <li>⎋ ESC: cancel</li>
                 </ul>
             </div>
 
         </details>
         <details>
             <summary>Filtri Difficoltà</summary>
-            <button onclick="loadTrailsByDifficulty('All')">Tutti</button>
+            <button onclick="loadTrailsByDifficulty('All')">All</button>
             <button onclick="loadTrailsByDifficulty('Easy')">Easy</button>
             <button onclick="loadTrailsByDifficulty('Moderate')">Moderate</button>
             <button onclick="loadTrailsByDifficulty('Hard')">Hard</button>
@@ -135,32 +135,32 @@
             <summary>Filtri Avanzati</summary>
 
             <input id="minArea" placeholder="Area ≥ (m²)" type="number" />
-            <button onclick="loadTrailsByArea()">Filtra Area</button>
+            <button onclick="loadTrailsByArea()">Filter Area</button>
 
             <input id="minLength" placeholder="Lunghezza ≥ (m)" type="number" />
-            <button onclick="loadTrailsByLength()">Filtra Lunghezza</button>
+            <button onclick="loadTrailsByLength()">Filter Lunghezza</button>
 
             <input id="nearestCount" placeholder="N vicini" type="number" />
-            <button onclick="enableNearestMode()">Seleziona Trail per Vicini</button>
+            <button onclick="enableNearestMode()">Select near Trails</button>
 
 
             <input id="attrField" placeholder="Campo (es. name)" type="text" />
             <input id="attrValue" placeholder="Valore" type="text" />
-            <button onclick="loadTrailsByAttribute()">Filtra Attributo</button>
+            <button onclick="loadTrailsByAttribute()">Filter property</button>
 
-            <button onclick="loadMultiIntersect()">Intersezioni fra Trail</button>
-            <button onclick="loadPolyContained()">Trail contenute nei poligoni</button>
+            <button onclick="loadMultiIntersect()">Intersection for trails</button>
+            <button onclick="loadPolyContained()">Trail inside polygons</button>
 
         </details>
     </div>
 
-    <div id="drawNotification">✏️ Disegna trail attivo</div>
+    <div id="drawNotification">✏️ Trail draw activated</div>
     <div id="infoSidebar">
         <h3>Trail Info</h3>
-        <p><strong>Nome:</strong> <span id="trailName"></span></p>
-        <p><strong>Difficoltà:</strong> <span id="trailDifficulty"></span></p>
+        <p><strong>Name:</strong> <span id="trailName"></span></p>
+        <p><strong>Difficulty:</strong> <span id="trailDifficulty"></span></p>
         <input type="hidden" id="trailId" />
-        <button onclick="deleteTrail()" style="background:#c00;color:#fff;">Elimina</button>
+        <button onclick="deleteTrail()" style="background:#c00;color:#fff;">Delete</button>
         <button onclick="closeSidebar()">Chiudi</button>
     </div>
 
@@ -171,7 +171,6 @@
           document.getElementById('infoSidebar').style.display = 'none';
         }
 
-        // fonte e layer vettoriale
         const vectorSource = new ol.source.Vector();
         const vectorLayer = new ol.layer.Vector({
           source: vectorSource,
@@ -180,7 +179,7 @@
             const stroke = new ol.style.Stroke({ color, width: 3 });
             let fill = null;
             if (feature.getGeometry().getType() === 'Polygon') {
-              // semi-trasparente ma cliccabile
+              //Clicckable
               fill = new ol.style.Fill({
                 color: color === 'red'
                   ? 'rgba(255,0,0,0.2)'
@@ -191,10 +190,8 @@
           }
         });
 
-        // flag di stato
         let nearestMode = false;
 
-        // mappa
         const map = new ol.Map({
           target: 'map',
           layers: [
@@ -221,12 +218,12 @@
         });
         map.addLayer(nearestLayer);
 
-        // GeoJSON reader (legge FeatureCollection → ol.Feature[])
+        // GeoJSON reader
         const geojsonFormat = new ol.format.GeoJSON({
           featureProjection: 'EPSG:3857'
         });
 
-        // helper per fetch + rendering
+        // Helper for fetch and rendering
         async function fetchAndRender(url, fetchOptions = {}) {
           const res = await fetch(url, fetchOptions);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -236,7 +233,7 @@
           vectorSource.addFeatures(features);
         }
 
-        // mappa enum → colore
+        // Maps Enum of difficulty -> color
         function getColor(difficulty) {
           const d = typeof difficulty === 'string'
             ? difficulty.toLowerCase()
@@ -249,7 +246,7 @@
         }
 
 
-        // carica tutte le trail nell’estensione corrente
+        // Fetch every trail from map position
         async function loadTrailsFromMapExtent() {
           if (activeTrailFilter) return;
           const extent = map.getView().calculateExtent(map.getSize());
@@ -263,7 +260,7 @@
           await fetchAndRender(url);
         }
 
-        // filtra per difficoltà
+        //difficulty filter
         async function loadTrailsByDifficulty(level) {
           activeTrailFilter = level === 'All' ? null : level;
 
@@ -280,19 +277,18 @@
           await fetchAndRender(url);
         }
 
-        // ricarica al termine del movimento
+        // Redraw at the end of the movement
         window.addEventListener('DOMContentLoaded', loadTrailsFromMapExtent);
         map.on('moveend', loadTrailsFromMapExtent);
 
-        // writer per estrarre GeoJSON in EPSG:4326 dal client (usato da spatialFilter)
         const geojsonWriter = new ol.format.GeoJSON({
           featureProjection: 'EPSG:3857',
           dataProjection:    'EPSG:4326'
         });
 
-        // --- FILTRO SPAZIALE (POST) ---
+        // Spatial filter
         async function enableTrailSpatialFilter() {
-          // disegna un poligono per filtrare
+            //draw a polygon
           const draw = new ol.interaction.Draw({
             source: new ol.source.Vector(),
             type:   'Polygon'
@@ -311,6 +307,7 @@
           });
         }
 
+        //Polygons filter
         async function loadOnlyPolygonTrails() {
           activeTrailFilter = 'PolygonOnly';
           await loadTrailsFromMapExtent();             
@@ -320,7 +317,7 @@
           vectorSource.addFeatures(polys);
         }
 
-        // --- FILTRO GENERICO PER ATTRIBUTO ---
+        // Generic filter
         async function loadTrailsByAttribute() {
           const field = document.getElementById('attrField').value.trim();
           const value = document.getElementById('attrValue').value.trim();
@@ -339,12 +336,12 @@
           await fetchAndRender(url);
         }
 
-        // --- FILTRO PER AREA ---
+        // Area filter
         async function loadTrailsByArea() {
           const m2 = parseFloat(document.getElementById('minArea').value);
           if (isNaN(m2)) return alert('Area non valida');
 
-          // conversione m²→gradi² (approx)
+           // conversion 
           const METERS_PER_DEG = 111_320;
           const minAreaDeg2 = m2 / (METERS_PER_DEG * METERS_PER_DEG);
 
@@ -353,17 +350,15 @@
           );
         }
 
-        // --- FILTRO PER LUNGHEZZA ---
+        // Lenght filter
         async function loadTrailsByLength() {
           const m = parseFloat(document.getElementById('minLength').value);
           if (isNaN(m)) return alert('Lunghezza non valida');
 
-          // extent corrente
           const ext = map.getView().calculateExtent(map.getSize());
           const bl  = ol.proj.toLonLat(ol.extent.getBottomLeft(ext));
           const tr  = ol.proj.toLonLat(ol.extent.getTopRight(ext));
 
-          // conversione m→gradi (approx)
           const deg = m / 111_320;
 
           const url = `/api/trailsapi/bylength`
@@ -374,10 +369,8 @@
           await fetchAndRender(url);
         }
 
-        // --- SELEZIONE & DELETE ---
         let selectedFeature = null;
 
-        // click per selezione feature
         map.on('singleclick', evt => {
           if (nearestMode) {
               const f = map.forEachFeatureAtPixel(evt.pixel, feat => feat);
@@ -450,7 +443,6 @@
           map.getTargetElement().style.cursor = '';
         }
 
-        // click sinistro = aggiungi punto
         map.on('click', evt => {
           if (!drawActive) return;
           const coord = ol.proj.toLonLat(evt.coordinate);
@@ -458,15 +450,15 @@
           seg.push(coord);
         });
 
-        // pointermove = anteprima tratto (ghost)
+        //Ghost move for drawing
         map.on('pointermove', evt => {
           if (!drawActive) return;
           const allLines = [];
-          // segmenti già chiusi
+
           drawSegments.slice(0, -1).forEach(seg => {
             if (seg.length > 1) allLines.push(seg.map(c => ol.proj.fromLonLat(c)));
           });
-          // segmento corrente + mouse
+
           const curr = drawSegments[drawSegments.length - 1];
           if (curr.length > 0) {
             const preview = [...curr, ol.proj.toLonLat(evt.coordinate)];
@@ -484,7 +476,7 @@
           }
         });
 
-        // right-click: chiudi segmento o finalizza
+        // right-click: close segment
         map.getViewport().addEventListener('contextmenu', evt => {
           if (!drawActive) return;
           evt.preventDefault();
@@ -553,7 +545,6 @@
           }
         }
 
-        // ESC e ENTER per annullare/finalizzare il disegno
         document.addEventListener('keydown', evt => {
           if (evt.key === 'Escape' && drawActive) cancelDrawing();
         });
@@ -628,7 +619,7 @@
             closeSidebar();
             alert("Modifiche salvate.");
           } else {
-            // prova a leggere il JSON di errore (o fallback a text)
+
             let errMsg;
             try {
               const errJson = await res.json();
@@ -660,7 +651,6 @@
             3: 3  // Hard
           };
 
-          // se è già un numero valido
           if (typeof raw === 'number' && raw in numMap) {
             return raw;
           }
@@ -668,12 +658,10 @@
           if (typeof raw === 'string') {
             const s = raw.trim().toLowerCase();
 
-            // mappa stringhe “unknown”/“easy”/“moderate”/“hard”
             if (s in strMap) {
               return strMap[s];
             }
 
-            // mappa stringhe numeriche “0”/“1”/“2”/“3”
             const n = parseInt(s, 10);
             if (!isNaN(n) && n in numMap) {
               return n;
@@ -684,7 +672,7 @@
           return 'Unknow';
         }
 
-        //Modalità Vicini
+        //Find n nearest neighbours
         function enableNearestMode() {
           const n = parseInt(document.getElementById('nearestCount').value);
           if (isNaN(n) || n <= 0) {
@@ -694,19 +682,16 @@
           alert(`Modalità vicini attivata: clicca su un trail per vederne ${n} più vicini`);
         }
 
-        // 3) Funzione di caricamento dei vicini
         async function loadNearestTrails(id, count) {
           try {
             const res = await fetch(`/api/trailsapi/nearest?id=${id}&count=${count}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const geojson = await res.json();
 
-            // 3.a) Pulisco e disegno sul layer dedicato
             nearestLayer.getSource().clear();
             const features = geojsonFormat.readFeatures(geojson);
             nearestLayer.getSource().addFeatures(features);
 
-            // 3.b) (opzionale) zoom su area dei vicini
             const extent = nearestLayer.getSource().getExtent();
             map.getView().fit(extent, { padding: [50,50,50,50], maxZoom: 16 });
           } catch (err) {
@@ -714,7 +699,7 @@
           }
         }
 
-        //Carica MultiLine + intersezioni
+        //Intersection filter
         async function loadMultiIntersect() {
           activeTrailFilter = 'MultiIntersect';
           const extent = map.getView().calculateExtent(map.getSize());
@@ -738,7 +723,7 @@
           }
         }
 
-        //Carica Polygons + trail contenute
+        //Polygons filter
         async function loadPolyContained() {
           activeTrailFilter = 'PolyContained';
           const extent = map.getView().calculateExtent(map.getSize());

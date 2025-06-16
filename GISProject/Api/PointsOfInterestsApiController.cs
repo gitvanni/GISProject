@@ -317,7 +317,7 @@ namespace GISProject.Api
                 if (path == null || path.Count == 0)
                     return NotFound(new { message = "Percorso non trovato." });
 
-                return Ok(path);
+                return Ok(ConvertPathToGeoJson(path));
             }
             catch (Exception ex)
             {
@@ -345,27 +345,6 @@ namespace GISProject.Api
                  .ToList();
 
             return results;
-        }
-
-        // Funzione che converte il percorso in un GeoJSON
-        private object ConvertPathToGeoJson(List<Coordinate> path)
-        {
-            var features = path.Select(c => new
-            {
-                type = "Feature",
-                geometry = new
-                {
-                    type = "Point",
-                    coordinates = new double[] { c.X, c.Y }
-                },
-                properties = new { }
-            });
-
-            return new
-            {
-                type = "FeatureCollection",
-                features
-            };
         }
 
         // Helper for approximate distance in degrees
@@ -398,5 +377,60 @@ namespace GISProject.Api
             }
         }
 
+        private object ConvertPathToGeoJson(List<DijkstraResult> path)
+        {
+            // Lista per le coordinate del percorso
+            var coordinates = new List<double[]>();
+
+            // Ottieni le coordinate per ogni nodo del percorso
+            foreach (var result in path)
+            {
+                // Query per ottenere le coordinate del nodo
+                    var query = @"
+                    SELECT ST_X(ST_Transform(the_geom, 4326)) AS X, ST_Y(ST_Transform(the_geom, 4326)) AS Y
+                    FROM road_network_vertices_pgr
+                    WHERE id = @nodeId";
+
+                var parameters = new { nodeId = result.Node };
+
+                using (var command = _context.Database.GetDbConnection().CreateCommand())
+                {
+                    command.CommandText = query;
+                    command.Parameters.Add(new NpgsqlParameter("nodeId", result.Node));
+                    _context.Database.OpenConnection();
+
+                    using (var reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            var x = reader.GetDouble(0);
+                            var y = reader.GetDouble(1);
+                            coordinates.Add(new double[] { x, y });
+                        }
+                    }
+
+                    _context.Database.CloseConnection();
+                }
+            }
+
+            // Restituisce il percorso come LineString GeoJSON
+            return new
+            {
+                type = "FeatureCollection",
+                features = new[]
+                {
+                    new
+                    {
+                        type = "Feature",
+                        geometry = new
+                        {
+                            type = "LineString",
+                            coordinates = coordinates
+                        },
+                        properties = new { }
+                    }
+                }
+            };
+        }
     }
 }

@@ -458,7 +458,7 @@
         });
     }
 
-   let DijkstraMode = false;
+    let DijkstraMode = false;
 
     //- Find shortest path to a point from a clicked point
     async function DijkstraShortestTrack(){
@@ -480,6 +480,8 @@
             );
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const fc = await res.json();
+
+            console.log(fc);
 
             // 4) leggi GeoJSON e aggiungi al source
             const format = new ol.format.GeoJSON();
